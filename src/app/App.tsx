@@ -1,16 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Landing from '../app/pages/Landing';
-import Login from '../app/pages/Login';  // Your Supabase login
+import { RouterProvider } from "react-router";
+import { router } from "../app/routes";
 
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-      </Routes>
-    </BrowserRouter>
-  );
+export default function App() {
+  return <RouterProvider router={router} />;
 }
-
-export default App;
