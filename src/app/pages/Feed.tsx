@@ -5,6 +5,8 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
 import { Badge } from "../components/ui/badge";
+import { useEffect, useState } from 'react'
+import { createClient, User } from '@supabase/supabase-js'
 import {
   ThumbsUp,
   MessageCircle,
@@ -15,60 +17,24 @@ import {
   FileText,
 } from "lucide-react";
 
-const mockPosts = [
-  {
-    id: 1,
-    author: {
-      name: "Sarah Johnson",
-      role: "Computer Science '24",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-    },
-    timestamp: "2 hours ago",
-    content: "Excited to announce that I'll be starting my internship at Microsoft this summer! Grateful for all the support from the Montevallo CS department. 🎉",
-    likes: 24,
-    comments: 8,
-    image: null,
-  },
-  {
-    id: 2,
-    author: {
-      name: "Dr. Michael Chen",
-      role: "Assistant Professor, Business",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Michael",
-    },
-    timestamp: "5 hours ago",
-    content: "Reminder: Applications for the Spring 2026 Business Analytics Research Program are due next Friday. This is a great opportunity for juniors and seniors interested in data science. Check the link in the opportunities section!",
-    likes: 45,
-    comments: 12,
-    image: null,
-  },
-  {
-    id: 3,
-    author: {
-      name: "Alumni Association",
-      role: "Official",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alumni",
-    },
-    timestamp: "1 day ago",
-    content: "Join us for the Annual Falcon Networking Mixer on March 15th! Connect with successful alumni across various industries. Register now - limited spots available!",
-    likes: 67,
-    comments: 23,
-    image: "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800",
-  },
-  {
-    id: 4,
-    author: {
-      name: "Marcus Williams",
-      role: "Marketing '25",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus",
-    },
-    timestamp: "2 days ago",
-    content: "Looking for a team member for our startup project in the Entrepreneurship course. Need someone with web development skills. DM me if interested!",
-    likes: 18,
-    comments: 15,
-    image: null,
-  },
-];
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_ANON_KEY!
+)
+
+const [user, setUser] = useState<User | null>(null)
+const [posts, setPosts] = useState<any[]>([])
+
+
+useEffect(() => {
+  supabase
+    .from('posts')
+    .select('*, profiles(first_name, last_name)')
+    .order('created_at', { ascending: false })
+    .then(({ data }) => console.log('Real posts:', data))
+}, [])
+
 
 export function Feed() {
   return (
@@ -112,7 +78,7 @@ export function Feed() {
 
         {/* Feed Posts */}
         <div className="space-y-4">
-          {mockPosts.map((post) => (
+          {posts.map((post) => (
             <Card key={post.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -120,7 +86,7 @@ export function Feed() {
                     <Avatar>
                       <AvatarImage src={post.author.avatar} alt={post.author.name} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {post.author.name.split(" ").map(n => n[0]).join("")}
+                        {(post.author?.name || "User").split(" ").map((n: string) => n[0]).join("")}
                       </AvatarFallback>
                     </Avatar>
                     <div>

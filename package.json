@@ -39,22 +39,15 @@
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
-<<<<<<< HEAD
-    "@supabase/supabase-js": "^2.98.0",
+    "@supabase/supabase-js": "2.98.0",
     "@tanstack/react-query": "^5.90.21",
-=======
->>>>>>> 50b47b722d18b16772fafd529511832abd031c28
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
-<<<<<<< HEAD
     "lucide-react": "^0.487.0",
-=======
-    "lucide-react": "0.487.0",
->>>>>>> 50b47b722d18b16772fafd529511832abd031c28
     "motion": "12.23.24",
     "next-themes": "0.4.6",
     "react-day-picker": "8.10.1",
@@ -65,27 +58,17 @@
     "react-resizable-panels": "2.1.7",
     "react-responsive-masonry": "2.7.1",
     "react-router": "^7.13.0",
-<<<<<<< HEAD
     "react-router-dom": "^7.13.1",
-=======
->>>>>>> 50b47b722d18b16772fafd529511832abd031c28
     "react-slick": "0.31.0",
     "recharts": "2.15.2",
     "sonner": "2.0.3",
     "tailwind-merge": "3.2.0",
-<<<<<<< HEAD
     "tw-animate-css": "^1.3.8",
-=======
-    "tw-animate-css": "1.3.8",
->>>>>>> 50b47b722d18b16772fafd529511832abd031c28
     "vaul": "1.1.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
-<<<<<<< HEAD
     "@types/react-dom": "^19.2.3",
-=======
->>>>>>> 50b47b722d18b16772fafd529511832abd031c28
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5"
@@ -107,8 +90,4 @@
       "vite": "6.3.5"
     }
   }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 50b47b722d18b16772fafd529511832abd031c28
