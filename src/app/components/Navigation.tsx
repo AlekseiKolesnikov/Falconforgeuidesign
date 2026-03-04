@@ -11,7 +11,6 @@ import {
 } from "../components/ui/dropdown-menu";
 import {
   Home,
-  MessageSquare,
   Briefcase,
   Calendar,
   User,
@@ -27,7 +26,6 @@ export function Navigation() {
 
   const navItems = [
     { href: "/feed", label: "Feed", icon: Home },
-    { href: "/messages", label: "Messages", icon: MessageSquare },
     { href: "/opportunities", label: "Opportunities", icon: Briefcase },
     { href: "/events", label: "Events", icon: Calendar },
   ];
