@@ -40,10 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       first_name: firstName,
       last_name: lastName,
       email, 
-      user_type: 'STUDENT_STAFF',
-      university_id: 1,  
-      major: 'Business Management',
-      swimmer: true  
+      user_type: 'STUDENT_STAFF'
     });
 
     if (profileError) throw profileError;
