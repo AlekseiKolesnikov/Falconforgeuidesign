@@ -34,13 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw new Error(error.message);
   };
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
+  const signUp = async (email: string, firstName: string, lastName: string) => {
 
     const { error: profileError } = await supabase.from('users').insert({  
       first_name: firstName,
       last_name: lastName,
-      email,
-      password_hash: password,  
+      email, 
       user_type: 'STUDENT_STAFF',
       university_id: 1,  
       major: 'Business Management',
