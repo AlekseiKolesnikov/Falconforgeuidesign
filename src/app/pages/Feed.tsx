@@ -1,72 +1,102 @@
+import { Badge } from "../components/ui/badge";
 import { useEffect, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext';
 import { Navigation } from "../components/Navigation";
 import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
-import { Badge } from "../components/ui/badge";
-import { createClient, User } from '@supabase/supabase-js'
 import {
   ThumbsUp, MessageCircle, Share2, MoreHorizontal,
   Image as ImageIcon, Video, FileText,
 } from "lucide-react";
+import { supabase } from '../../lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_ANON_KEY!
-)
+const demoPosts = [
+  {
+    id: 'demo1',
+    profiles: { first_name: 'Aleksei', last_name: 'Kolesnikov' },
+    content: '🏊‍♂️ Swim captain ready! #MontevalloSwim',
+    hashtags: ['#MontevalloSwim'],
+    likes: 42,
+    created_at: new Date().toISOString()
+  }
+];
 
-export function Feed() {  
-  const [user, setUser] = useState<User | null>(null)     
-  const [posts, setPosts] = useState<any[]>([])            
+export function Feed() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  const [content, setContent] = useState('');
 
-  useEffect(() => {                                        
-    supabase
-      .from('posts')
-      .select('*, profiles(first_name, last_name)')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        console.log('Real posts:', data)
-        setPosts(data || [])  // ✅ Use data
-      })
-  }, [])
-
-  // Demo fallback posts (if Supabase empty)
-  const demoPosts = [
-    {
-      id: 1, author: { name: "Aleksei K 🏊‍♂️", role: "Swim Captain", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Aleksei" },
-      content: "Broke 3 school records this season! Who's ready for NCAAs? 💪 #MontevalloSwim", likes: 42, comments: 12, timestamp: "2h ago"
-    },
-    {
-      id: 2, author: { name: "Montevallo Swim", role: "Team Account", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Team" },
-      content: "Congrats Aleksei on All-American honors! 🥈 #FalconPride", likes: 128, comments: 25, timestamp: "1d ago"
+  // Posts query
+  const { data: posts = [] } = useQuery({
+    queryKey: ['posts'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('posts')
+        .select('*, profiles(first_name, last_name, avatar)')
+        .order('created_at', { ascending: false });
+      return data || [];
     }
-  ]
+  });
+
+  // Create post
+  const createPost = useMutation({
+    mutationFn: async () => {
+      const hashtags = content.match(/#\w+/g) || [];
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          content,
+          hashtags,
+          profile_id: session?.user?.id || '00000000-0000-0000-0000-000000000001'  //
+        })
+        .select()
+        .single();
+      if (error) console.error(error);  // Debug
+      throw error || undefined;
+      return data;
+    },
+    onSuccess: () => {
+      setContent('');
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    }
+  });
 
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
       <div className="container max-w-4xl mx-auto px-4 py-6">
-        {/* Create Post Card */}
+        {/* Create Post */}
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center gap-3">
               <Avatar>
                 <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Aleksei" />
-                <AvatarFallback className="bg-primary text-primary-foreground">AK</AvatarFallback>
+                <AvatarFallback>AK</AvatarFallback>
               </Avatar>
-              <Textarea placeholder="Share an update with Falcons..." className="min-h-[60px] resize-none" />
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What's new Falcons? #Swim #Jobs #Montevallo"
+                className="min-h-[60px] resize-none"
+              />
             </div>
           </CardHeader>
           <Separator />
           <CardFooter className="pt-4 flex justify-between">
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" className="gap-2"><ImageIcon className="h-4 w-4 text-primary" />Photo</Button>
-              <Button variant="ghost" size="sm" className="gap-2"><Video className="h-4 w-4 text-primary" />Video</Button>
-              <Button variant="ghost" size="sm" className="gap-2"><FileText className="h-4 w-4 text-primary" />Article</Button>
+              <Button variant="ghost" size="sm"><ImageIcon className="h-4 w-4" />Photo</Button>
+              <Button variant="ghost" size="sm"><Video className="h-4 w-4" />Video</Button>
             </div>
-            <Button>Post</Button>
+            <Button
+              onClick={() => createPost.mutate()}
+              disabled={!session || createPost.isPending || !content.trim()}
+            >
+              {createPost.isPending ? 'Posting...' : 'Post'}
+            </Button>
           </CardFooter>
         </Card>
 
@@ -78,29 +108,45 @@ export function Feed() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={post.author?.avatar} alt={post.author?.name} />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {(post.author?.name || "User").split(" ")[0][0]}
+                      <AvatarImage src={post.profiles?.avatar} />
+                      <AvatarFallback>
+                        {post.profiles?.first_name?.[0]}{post.profiles?.last_name?.[0]}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <h3 className="font-semibold">{post.author?.name || post.profiles?.first_name}</h3>
-                      <p className="text-sm text-muted-foreground">{post.author?.role}</p>
-                      <p className="text-xs text-muted-foreground">{post.created_at || post.timestamp}</p>
+                      <h3 className="font-semibold">
+                        {post.profiles?.first_name} {post.profiles?.last_name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">Student</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(post.created_at).toLocaleString()}
+                      </p>
                     </div>
                   </div>
                   <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                 </div>
               </CardHeader>
-              <CardContent>
-                <p>{post.content}</p>
+              <CardContent className="pt-0">
+                <p className="whitespace-pre-wrap">{post.content}</p>
+                {post.hashtags?.length ? (
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {post.hashtags.map((tag: string) => (
+                      <Badge key={tag} variant="secondary" className="cursor-pointer">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
               </CardContent>
               <Separator />
               <CardFooter>
                 <div className="flex gap-6">
-                  <Button variant="ghost" size="sm"><ThumbsUp className="h-4 w-4 mr-1" /> {post.likes}</Button>
-                  <Button variant="ghost" size="sm"><MessageCircle className="h-4 w-4 mr-1" /> {post.comments}</Button>
-                  <Button variant="ghost" size="sm"><Share2 className="h-4 w-4 mr-1" /> Share</Button>
+                  <Button variant="ghost" size="sm">
+                    <ThumbsUp className="h-4 w-4 mr-1" /> {post.likes || 0}
+                  </Button>
+                  <Button variant="ghost" size="sm">
+                    <MessageCircle className="h-4 w-4 mr-1" /> 0
+                  </Button>
                 </div>
               </CardFooter>
             </Card>
@@ -109,4 +155,4 @@ export function Feed() {
       </div>
     </div>
   );
-}  
+}

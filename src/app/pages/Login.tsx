@@ -1,5 +1,6 @@
-import { useState } from "react"; 
-import { useNavigate } from "react-router-dom";       
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -15,88 +16,54 @@ const supabase = createClient(
 
 export function Login() {
   const navigate = useNavigate();
+  const { signIn, signUp } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
-// Replace ENTIRE handleLogin + handleSignup
-const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsLoading(true);
-  // DEMO BYPASS
-  setTimeout(() => {
-    console.log("🚀 Falcon Forge DEMO - Welcome!");
-    navigate("/feed");
-    setIsLoading(false);
-  }, 1000);
-};
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-const handleSignup = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsLoading(true);
-  // DEMO BYPASS
-  setTimeout(() => {
-    console.log("🚀 New Falcon account created!");
-    navigate("/feed");
-    setIsLoading(false);
-  }, 1000);
-};
+    const formData = new FormData(e.target as HTMLFormElement);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
 
-  // const handleLogin = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   setIsLoading(true);
+    try {
+      await signIn(email, password); 
+      navigate("/feed");              
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  //   const formData = new FormData(e.target as HTMLFormElement);
-  //   const email = formData.get('email') as string;
-  //   const password = formData.get('password') as string;
+  // Login.tsx - Replace ENTIRE handleSignup  
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-  //   try {
-  //     const { data, error } = await supabase.auth.signInWithPassword({
-  //       email,
-  //       password
-  //     } as any);  // TypeScript bypass
+    const formData = new FormData(e.target as HTMLFormElement);
+    const firstName = formData.get('firstName') as string;
+    const lastName = formData.get('lastName') as string;
+    const email = formData.get('signupEmail') as string;
+    const password = formData.get('signupPassword') as string;
+    const confirmPassword = formData.get('confirmPassword') as string;
 
-  //     if (error) throw error;
-  //     if (data.user) {
-  //       navigate("/feed");
-  //     }
-  //   } catch (error: any) {
-  //     alert(error.message);
-  //   }
+    if (password !== confirmPassword) {
+      alert("Passwords don't match");
+      setIsLoading(false);
+      return;
+    }
 
-  //   setIsLoading(false);
-  // };
-
-
-  // const handleSignup = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   setIsLoading(true);
-
-  //   const formData = new FormData(e.target as HTMLFormElement);
-  //   const email = formData.get('signupEmail') as string;
-  //   const password = formData.get('signupPassword') as string;
-  //   const firstName = formData.get('firstName') as string;
-  //   const lastName = formData.get('lastName') as string;
-
-  //   // Create user
-  //   const { error } = await supabase.auth.signUp({ email, password });
-
-  //   if (error) alert(error.message);
-  //   else {
-  //     console.log("First Name:", firstName);
-  //     console.log("Last Name:", lastName);
-  //     console.log("Password:", password);
-
-  //     // Save profile
-  //     await supabase.from('profiles').upsert({
-  //       id: (await supabase.auth.getUser()).data.user?.id,
-  //       first_name: firstName,
-  //       last_name: lastName,
-  //       email
-  //     });
-  //     navigate("/feed");
-  //   }
-
-  //   setIsLoading(false);
-  // };
+    try {
+      await signUp(email, password, firstName, lastName);  
+      navigate("/feed");                                   
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
@@ -292,7 +259,7 @@ const handleSignup = async (e: React.FormEvent) => {
             </TabsContent>
           </Tabs>
 
-          
+
 
           <p className="text-center text-sm text-muted-foreground">
             By continuing, you agree to Falcon Forge's Terms of Service and Privacy Policy
