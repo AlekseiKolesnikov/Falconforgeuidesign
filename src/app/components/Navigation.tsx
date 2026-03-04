@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router";
-import { Button } from "./ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from ".//ui/avatar";
+import { Button } from "../components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,9 +8,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "../components/ui/dropdown-menu";
 import {
   Home,
+  MessageSquare,
   Briefcase,
   Calendar,
   User,
@@ -19,13 +20,14 @@ import {
   Bell,
   Search,
 } from "lucide-react";
-import { Input } from "./ui/input";
+import { Input } from "../components/ui/input";
 
 export function Navigation() {
   const location = useLocation();
 
   const navItems = [
     { href: "/feed", label: "Feed", icon: Home },
+    { href: "/messages", label: "Messages", icon: MessageSquare },
     { href: "/opportunities", label: "Opportunities", icon: Briefcase },
     { href: "/events", label: "Events", icon: Calendar },
   ];
