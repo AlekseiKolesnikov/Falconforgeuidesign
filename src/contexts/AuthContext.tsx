@@ -44,15 +44,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (authError) throw authError;
 
-    const userEmail = data.user?.email || email;  
+    const userEmail = data.user?.email || email;
 
     const { error: profileError } = await supabase.from('profiles').insert({
       email: userEmail,
-      first_name: firstName,
-      last_name: lastName,
-      swimmer: true,
-    });
+      first_name: firstName,    
+      last_name: lastName,       
+      swimmer: true
+    }).select(); 
 
+    console.log('Profile response:', profileError ? profileError : 'SUCCESS');
     if (profileError) throw profileError;
   };
 
