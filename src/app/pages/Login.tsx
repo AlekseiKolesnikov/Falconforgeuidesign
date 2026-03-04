@@ -17,63 +17,86 @@ export function Login() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    const formData = new FormData(e.target as HTMLFormElement);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      } as any);  // TypeScript bypass
-
-      if (error) throw error;
-      if (data.user) {
-        navigate("/feed");
-      }
-    } catch (error: any) {
-      alert(error.message);
-    }
-
+// Replace ENTIRE handleLogin + handleSignup
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
+  // DEMO BYPASS
+  setTimeout(() => {
+    console.log("🚀 Falcon Forge DEMO - Welcome!");
+    navigate("/feed");
     setIsLoading(false);
-  };
+  }, 1000);
+};
 
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    const formData = new FormData(e.target as HTMLFormElement);
-    const email = formData.get('signupEmail') as string;
-    const password = formData.get('signupPassword') as string;
-    const firstName = formData.get('firstName') as string;
-    const lastName = formData.get('lastName') as string;
-
-    // Create user
-    const { error } = await supabase.auth.signUp({ email, password });
-
-    if (error) alert(error.message);
-    else {
-      console.log("First Name:", firstName);
-      console.log("Last Name:", lastName);
-      console.log("Password:", password);
-
-      // Save profile
-      await supabase.from('profiles').upsert({
-        id: (await supabase.auth.getUser()).data.user?.id,
-        first_name: firstName,
-        last_name: lastName,
-        email
-      });
-      navigate("/feed");
-    }
-
+const handleSignup = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
+  // DEMO BYPASS
+  setTimeout(() => {
+    console.log("🚀 New Falcon account created!");
+    navigate("/feed");
     setIsLoading(false);
-  };
+  }, 1000);
+};
+
+  // const handleLogin = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setIsLoading(true);
+
+  //   const formData = new FormData(e.target as HTMLFormElement);
+  //   const email = formData.get('email') as string;
+  //   const password = formData.get('password') as string;
+
+  //   try {
+  //     const { data, error } = await supabase.auth.signInWithPassword({
+  //       email,
+  //       password
+  //     } as any);  // TypeScript bypass
+
+  //     if (error) throw error;
+  //     if (data.user) {
+  //       navigate("/feed");
+  //     }
+  //   } catch (error: any) {
+  //     alert(error.message);
+  //   }
+
+  //   setIsLoading(false);
+  // };
+
+
+  // const handleSignup = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setIsLoading(true);
+
+  //   const formData = new FormData(e.target as HTMLFormElement);
+  //   const email = formData.get('signupEmail') as string;
+  //   const password = formData.get('signupPassword') as string;
+  //   const firstName = formData.get('firstName') as string;
+  //   const lastName = formData.get('lastName') as string;
+
+  //   // Create user
+  //   const { error } = await supabase.auth.signUp({ email, password });
+
+  //   if (error) alert(error.message);
+  //   else {
+  //     console.log("First Name:", firstName);
+  //     console.log("Last Name:", lastName);
+  //     console.log("Password:", password);
+
+  //     // Save profile
+  //     await supabase.from('profiles').upsert({
+  //       id: (await supabase.auth.getUser()).data.user?.id,
+  //       first_name: firstName,
+  //       last_name: lastName,
+  //       email
+  //     });
+  //     navigate("/feed");
+  //   }
+
+  //   setIsLoading(false);
+  // };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
