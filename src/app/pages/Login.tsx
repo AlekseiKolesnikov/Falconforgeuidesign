@@ -56,9 +56,12 @@ export function Login() {
     }
 
     try {
-      await signUp(email, password, firstName, lastName);  
+      console.log('Signing up:', { email, firstName, lastName });
+      await signUp(email, password, firstName, lastName);
+      console.log('Signup success!');  
       navigate("/feed");                                   
     } catch (error: any) {
+      console.error('Signup error:', error);  // ← CRITICAL
       alert(error.message);
     } finally {
       setIsLoading(false);
