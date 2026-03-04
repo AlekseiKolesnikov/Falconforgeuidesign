@@ -42,14 +42,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Create profile
     const { error: profileError } = await supabase.from('profiles').insert({
-      email,
+      email: data.user?.email || email,  // ✅ Fallback
       first_name: firstName,
       last_name: lastName,
-      swimmer: true  // 🏊
+      swimmer: true
     });
 
     console.log('Profile insert:', profileError ? 'ERROR' : 'OK', profileError);
-    
+
     if (profileError) throw profileError;
   };
 
