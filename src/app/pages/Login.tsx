@@ -216,6 +216,7 @@ export function Login() {
                       <Label htmlFor="signupEmail">University Email</Label>
                       <Input
                         id="signupEmail"
+                        name="signupEmail"
                         type="email"
                         placeholder="you@montevallo.edu"
                         required
@@ -226,6 +227,7 @@ export function Login() {
                       <Label htmlFor="signupPassword">Password</Label>
                       <Input
                         id="signupPassword"
+                        name="signupPassword"
                         type="password"
                         placeholder="••••••••"
                         required
@@ -236,6 +238,7 @@ export function Login() {
                       <Label htmlFor="confirmPassword">Confirm Password</Label>
                       <Input
                         id="confirmPassword"
+                        name="confirmPassword"
                         type="password"
                         placeholder="••••••••"
                         required
