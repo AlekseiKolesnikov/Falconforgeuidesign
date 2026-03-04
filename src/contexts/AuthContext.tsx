@@ -35,25 +35,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    console.log('Signup:', { email, firstName, lastName });
 
-    const { data, error: authError } = await supabase.auth.signUp({
+    const { error: profileError } = await supabase.from('users').insert({  
+      first_name: firstName,
+      last_name: lastName,
       email,
-      password,
+      password_hash: password,  
+      user_type: 'STUDENT_STAFF',
+      university_id: 1,  
+      major: 'Business Management',
+      swimmer: true  
     });
 
-    if (authError) throw authError;
-
-    const userEmail = data.user?.email || email;
-
-    const { error: profileError } = await supabase.from('profiles').insert({
-      email: userEmail,
-      first_name: firstName,    
-      last_name: lastName,       
-      swimmer: true
-    }).select(); 
-
-    console.log('Profile response:', profileError ? profileError : 'SUCCESS');
     if (profileError) throw profileError;
   };
 
