@@ -34,25 +34,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw new Error(error.message);
   };
 
-  const signUp = async (email: string, firstName: string, lastName: string) => {
-
-    const { error: profileError } = await supabase.from('users').insert({  
-      first_name: firstName,
-      last_name: lastName,
-      email, 
-      user_type: 'STUDENT_STAFF'
+  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
+    
+    // 1. Create the user in Supabase Auth (This handles the password securely!)
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
     });
 
-    if (profileError) throw profileError;
-  };
+    if (authError) throw new Error(authError.message);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">Loading Falcon Forge...</div>
-      </div>
-    );
-  }
+    // 2. If successful, save their extra info to your public.users table
+    if (authData.user) {
+      const { error: profileError } = await supabase.from('users').insert({  
+        auth_users_uuid: authData.user.id, // Crucial: Links public.users to auth.users
+        first_name: firstName,
+        last_name: lastName,
+        email: email, 
+        user_type: 'STUDENT_STAFF'
+      });
+
+      if (profileError) throw new Error(profileError.message);
+    }
+  };
 
   return (
     <AuthContext.Provider value={{ session, loading, signIn, signUp }}>

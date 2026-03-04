@@ -6,13 +6,6 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { ImageWithFallback } from "../components/figma/ImageWithFallback";
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_ANON_KEY!
-);
 
 export function Login() {
   const navigate = useNavigate();
@@ -149,6 +142,7 @@ export function Login() {
                       <Label htmlFor="email">Email</Label>
                       <Input
                         id="email"
+                        name="email"
                         type="email"
                         placeholder="you@montevallo.edu"
                         required
@@ -159,6 +153,7 @@ export function Login() {
                       <Label htmlFor="password">Password</Label>
                       <Input
                         id="password"
+                        name="password"
                         type="password"
                         placeholder="••••••••"
                         required
@@ -200,6 +195,7 @@ export function Login() {
                         <Label htmlFor="firstName">First Name</Label>
                         <Input
                           id="firstName"
+                          name="firstName"
                           placeholder="John"
                           required
                           className="bg-input-background"
@@ -209,6 +205,7 @@ export function Login() {
                         <Label htmlFor="lastName">Last Name</Label>
                         <Input
                           id="lastName"
+                          name="lastName"
                           placeholder="Doe"
                           required
                           className="bg-input-background"
