@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom"; // Updated to react-router-dom for useNavigate
-import { supabase } from "../../lib/supabase"; // Adjust this path if your supabase client is located elsewhere
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "../../lib/supabase"; 
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import {
@@ -40,14 +40,12 @@ export function Navigation() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch name and email from your public.users table
       const { data: dbUser } = await supabase
         .from("users")
         .select("first_name, last_name, email, profile_photo_url")
         .eq("auth_users_uuid", user.id)
         .single();
 
-      // Fetch avatar from profiles table (matching how your Profile page works)
       const { data: profileData } = await supabase
         .from("profiles")
         .select("avatar")
@@ -69,7 +67,7 @@ export function Navigation() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/"); // Redirect back to the login page
+    navigate("/"); 
   };
 
   const navItems = [
@@ -78,7 +76,6 @@ export function Navigation() {
     { href: "/events", label: "Events", icon: Calendar },
   ];
 
-  // Helper to safely get initials
   const getInitials = () => {
     if (!userData) return "U";
     return `${userData.firstName.charAt(0)}${userData.lastName.charAt(0)}`.toUpperCase();
@@ -152,16 +149,24 @@ export function Navigation() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {userData ? `${userData.firstName} ${userData.lastName}` : "Loading..."}
-                  </p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {userData?.email || "Loading..."}
-                  </p>
-                </div>
+              
+              {/* UPDATED: Clickable Profile Header */}
+              <DropdownMenuLabel className="font-normal p-0">
+                <Link 
+                  to="/profile/me" 
+                  className="block px-3 py-2.5 hover:bg-muted cursor-pointer transition-colors rounded-t-sm"
+                >
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {userData ? `${userData.firstName} ${userData.lastName}` : "Loading..."}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {userData?.email || "Loading..."}
+                    </p>
+                  </div>
+                </Link>
               </DropdownMenuLabel>
+              
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link to="/profile/me" className="flex items-center cursor-pointer">
@@ -174,7 +179,6 @@ export function Navigation() {
                 <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {/* Updated Logout Action */}
               <DropdownMenuItem asChild>
                 <button 
                   onClick={handleLogout} 
