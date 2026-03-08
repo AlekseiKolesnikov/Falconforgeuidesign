@@ -22,7 +22,7 @@ interface Education { school_name: string; degree?: string; field_of_study?: str
 interface Experience { organization_name: string; title: string; location?: string; start_date: string; end_date?: string | null; is_current: boolean; description?: string; }
 interface Skill { name: string; proficiency_level?: string; }
 
-export default function ProfilePage() {
+export function Profile() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [education, setEducation] = useState<Education[]>([]);
   const [experiences, setExperiences] = useState<Experience[]>([]);
