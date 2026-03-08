@@ -129,67 +129,33 @@ export function Navigation() {
         </div>
 
         {/* Right side actions */}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-3 ml-auto">
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
             <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
           </Button>
 
-          {/* User Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar>
-                  <AvatarImage src={userData?.avatarUrl} alt={userData?.firstName || "Profile"} className="object-cover" />
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    {getInitials()}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
-              
-              {/* UPDATED: Clickable Profile Header */}
-              <DropdownMenuLabel className="font-normal p-0">
-                <Link 
-                  to="/profile/me" 
-                  className="block px-3 py-2.5 hover:bg-muted cursor-pointer transition-colors rounded-t-sm"
-                >
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {userData ? `${userData.firstName} ${userData.lastName}` : "Loading..."}
-                    </p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {userData?.email || "Loading..."}
-                    </p>
-                  </div>
-                </Link>
-              </DropdownMenuLabel>
-              
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/profile/me" className="flex items-center cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <button 
-                  onClick={handleLogout} 
-                  className="w-full flex items-center cursor-pointer text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </button>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Direct Link to Profile */}
+          <Link to="/profile/me" className="transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary rounded-full">
+            <Avatar className="h-10 w-10 border-2 border-transparent hover:border-primary/50 transition-colors">
+              <AvatarImage src={userData?.avatarUrl} alt={userData?.firstName || "Profile"} className="object-cover" />
+              <AvatarFallback className="bg-primary text-primary-foreground font-medium">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
+          </Link>
+
+          {/* Dedicated Logout Button */}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleLogout}
+            title="Log out"
+            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 
