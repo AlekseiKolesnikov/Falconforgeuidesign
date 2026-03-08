@@ -1,4 +1,6 @@
-import { Link, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom"; // Updated to react-router-dom for useNavigate
+import { supabase } from "../../lib/supabase"; // Adjust this path if your supabase client is located elsewhere
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import {
@@ -21,14 +23,66 @@ import {
 } from "lucide-react";
 import { Input } from "../components/ui/input";
 
+interface NavUserData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl: string;
+}
+
 export function Navigation() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [userData, setUserData] = useState<NavUserData | null>(null);
+
+  useEffect(() => {
+    const fetchSessionUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch name and email from your public.users table
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("first_name, last_name, email, profile_photo_url")
+        .eq("auth_users_uuid", user.id)
+        .single();
+
+      // Fetch avatar from profiles table (matching how your Profile page works)
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("avatar")
+        .eq("email", user.email)
+        .maybeSingle();
+
+      if (dbUser) {
+        setUserData({
+          firstName: dbUser.first_name || "",
+          lastName: dbUser.last_name || "",
+          email: dbUser.email || user.email || "",
+          avatarUrl: profileData?.avatar || dbUser.profile_photo_url || "",
+        });
+      }
+    };
+
+    fetchSessionUser();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/"); // Redirect back to the login page
+  };
 
   const navItems = [
     { href: "/feed", label: "Feed", icon: Home },
     { href: "/opportunities", label: "Opportunities", icon: Briefcase },
     { href: "/events", label: "Events", icon: Calendar },
   ];
+
+  // Helper to safely get initials
+  const getInitials = () => {
+    if (!userData) return "U";
+    return `${userData.firstName.charAt(0)}${userData.lastName.charAt(0)}`.toUpperCase();
+  };
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -90,17 +144,21 @@ export function Navigation() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                 <Avatar>
-                  <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=John" alt="Profile" />
-                  <AvatarFallback className="bg-primary text-primary-foreground">JD</AvatarFallback>
+                  <AvatarImage src={userData?.avatarUrl} alt={userData?.firstName || "Profile"} className="object-cover" />
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {getInitials()}
+                  </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">John Doe</p>
+                  <p className="text-sm font-medium leading-none">
+                    {userData ? `${userData.firstName} ${userData.lastName}` : "Loading..."}
+                  </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    john.doe@montevallo.edu
+                    {userData?.email || "Loading..."}
                   </p>
                 </div>
               </DropdownMenuLabel>
@@ -116,11 +174,15 @@ export function Navigation() {
                 <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {/* Updated Logout Action */}
               <DropdownMenuItem asChild>
-                <Link to="/" className="flex items-center cursor-pointer text-destructive">
+                <button 
+                  onClick={handleLogout} 
+                  className="w-full flex items-center cursor-pointer text-destructive"
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
-                </Link>
+                </button>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
