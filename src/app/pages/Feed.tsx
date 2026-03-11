@@ -18,6 +18,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 import { supabase } from '../../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -26,6 +36,7 @@ export function Feed() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [content, setContent] = useState('');
+  const [postToDelete, setPostToDelete] = useState<number | null>(null);
 
   // 1. Fetch the CURRENT logged-in user's public integer ID so they can post
   const { data: currentUser } = useQuery({
@@ -231,10 +242,8 @@ export function Feed() {
                               <DropdownMenuItem
                                 className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
                                 onClick={(e) => {
-                                  e.stopPropagation(); // Prevents click events from bubbling up
-                                  if (window.confirm("Are you sure you want to delete this post?")) {
-                                    deletePost.mutate(post.id);
-                                  }
+                                  e.stopPropagation();
+                                  setPostToDelete(post.id); // <--- This triggers the beautiful modal
                                 }}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -281,6 +290,31 @@ export function Feed() {
           })}
         </div>
       </div>
+      {/* Premium Delete Confirmation Modal */}
+      <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your post from the Falcon Forge feed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (postToDelete) {
+                  deletePost.mutate(postToDelete);
+                  setPostToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
