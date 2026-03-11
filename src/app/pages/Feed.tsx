@@ -80,19 +80,53 @@ export function Feed() {
   const createPost = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id) throw new Error("No user ID found");
+      
+      // Extract tags and ensure they are lowercase for consistency
+      const rawTags = content.match(/#[a-zA-Z0-9_]+/g) || [];
+      const extractedTags = rawTags.map(tag => tag.toLowerCase());
 
-      const hashtags = content.match(/#[a-zA-Z0-9_]+/g) || [];
-      const { data, error } = await supabase
+      // STEP A: Insert the Post
+      const { data: newPost, error: postError } = await supabase
         .from('posts')
         .insert({
           content: content.trim(),
-          hashtags,
-          user_id: currentUser.id // Uses the integer ID from public.users
+          hashtags: extractedTags, // Keep saving the array for easy UI rendering
+          user_id: currentUser.id 
         })
-        .select();
+        .select()
+        .single(); // We need .single() so we can grab the new post's ID!
+        
+      if (postError) throw postError;
 
-      if (error) throw error;
-      return data;
+      // STEP B: Process the Tags into the relational tables
+      if (extractedTags.length > 0) {
+        for (const tagName of extractedTags) {
+          
+          // 1. Upsert the tag (If it exists, return it. If not, create it and return it)
+          const { data: tagData, error: tagError } = await supabase
+            .from('tags')
+            .upsert({ name: tagName }, { onConflict: 'name' }) 
+            .select()
+            .single();
+
+          if (tagError) {
+            console.error("Error saving tag:", tagError);
+            continue; // Skip to the next tag if this one fails
+          }
+
+          // 2. Link the tag to the post in post_tags
+          if (tagData) {
+            await supabase
+              .from('post_tags')
+              .insert({
+                post_id: newPost.id,
+                tag_id: tagData.id
+              });
+          }
+        }
+      }
+
+      return newPost;
     },
     onSuccess: () => {
       setContent('');
