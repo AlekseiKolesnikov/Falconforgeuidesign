@@ -10,10 +10,17 @@ import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
 import {
   ThumbsUp, MessageCircle, MoreHorizontal,
-  Image as ImageIcon, Video
+  Image as ImageIcon, Video, Trash2
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 import { supabase } from '../../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
 
 export function Feed() {
   const { session } = useAuth();
@@ -52,7 +59,7 @@ export function Feed() {
           )
         `)
         .order('created_at', { ascending: false });
-        
+
       if (error) throw error;
       return data || [];
     }
@@ -62,7 +69,7 @@ export function Feed() {
   const createPost = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id) throw new Error("No user ID found");
-      
+
       const hashtags = content.match(/#[a-zA-Z0-9_]+/g) || [];
       const { data, error } = await supabase
         .from('posts')
@@ -72,7 +79,7 @@ export function Feed() {
           user_id: currentUser.id // Uses the integer ID from public.users
         })
         .select();
-        
+
       if (error) throw error;
       return data;
     },
@@ -86,10 +93,30 @@ export function Feed() {
     }
   });
 
+  // 4. Delete post mutation
+  const deletePost = useMutation({
+    mutationFn: async (postId: number) => {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // Magically removes the post from the screen without reloading
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    },
+    onError: (error) => {
+      console.error("Failed to delete post:", error);
+      alert("Failed to delete post.");
+    }
+  });
+
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
-      
+
       <div className="container max-w-3xl mx-auto px-4 py-6">
         {/* Create Post Card */}
         <Card className="mb-6 shadow-sm border-0">
@@ -134,7 +161,7 @@ export function Feed() {
         {/* Posts Feed */}
         <div className="space-y-4">
           {isLoading && <div className="text-center py-8 text-muted-foreground">Loading posts...</div>}
-          
+
           {posts.length === 0 && !isLoading && (
             <div className="text-center py-12 text-muted-foreground bg-card rounded-xl border border-border shadow-sm">
               No posts yet. Be the first to share something!
@@ -153,8 +180,8 @@ export function Feed() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       {/* CLICKABLE AVATAR */}
-                      <Link 
-                        to={`/profile/${user?.id}`} 
+                      <Link
+                        to={`/profile/${user?.id}`}
                         className="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
                       >
                         <Avatar className="w-12 h-12">
@@ -164,7 +191,7 @@ export function Feed() {
                           </AvatarFallback>
                         </Avatar>
                       </Link>
-                      
+
                       {/* CLICKABLE NAME & HEADLINE */}
                       <Link to={`/profile/${user?.id}`} className="hover:underline cursor-pointer">
                         <h3 className="font-semibold text-base text-foreground leading-none">
@@ -174,29 +201,57 @@ export function Feed() {
                           {user?.headline || 'Student at University of Montevallo'}
                         </p>
                       </Link>
-                      
+
                       <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">
                         • {postDate}
                       </span>
                     </div>
-                    
+
                     {/* Right aligned items (Mobile Date & More button) */}
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground sm:hidden">
                         {new Date(post.created_at).toLocaleDateString()}
                       </span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground -mr-2">
-                        <MoreHorizontal className="h-5 w-5" />
-                      </Button>
+                      
+                      {/* Right aligned items (Mobile Date & More button) */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground sm:hidden">
+                          {new Date(post.created_at).toLocaleDateString()}
+                        </span>
+
+                        {/* ONLY SHOW THE MENU IF THE POST BELONGS TO THE CURRENT USER */}
+                        {currentUser?.id === post.user_id && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground -mr-2 hover:bg-muted">
+                                <MoreHorizontal className="h-5 w-5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive cursor-pointer"
+                                onClick={() => {
+                                  if (window.confirm("Are you sure you want to delete this post?")) {
+                                    deletePost.mutate(post.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                <span>Delete Post</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
-                
+
                 <CardContent className="pt-1 pb-4">
                   <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed">
                     {post.content}
                   </p>
-                  
+
                   {post.hashtags?.length > 0 && (
                     <div className="flex gap-2 mt-4 flex-wrap">
                       {post.hashtags.map((tag: string) => (
@@ -207,16 +262,16 @@ export function Feed() {
                     </div>
                   )}
                 </CardContent>
-                
+
                 <Separator />
-                
+
                 <CardFooter className="py-2 px-2 flex gap-1 bg-card">
                   <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none">
-                    <ThumbsUp className="h-4 w-4 mr-2" /> 
+                    <ThumbsUp className="h-4 w-4 mr-2" />
                     {post.likes || 0}
                   </Button>
                   <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none">
-                    <MessageCircle className="h-4 w-4 mr-2" /> 
+                    <MessageCircle className="h-4 w-4 mr-2" />
                     Comment
                   </Button>
                 </CardFooter>
