@@ -212,25 +212,26 @@ export function Feed() {
                       <span className="text-xs text-muted-foreground sm:hidden">
                         {new Date(post.created_at).toLocaleDateString()}
                       </span>
-                      
                       {/* Right aligned items (Mobile Date & More button) */}
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground sm:hidden">
                           {new Date(post.created_at).toLocaleDateString()}
                         </span>
 
-                        {/* ONLY SHOW THE MENU IF THE POST BELONGS TO THE CURRENT USER */}
-                        {currentUser?.id === post.user_id && (
+                        {/* FIX 1: Using == instead of === in case one ID is a string and the other is a number */}
+                        {currentUser?.id == post.user_id && (
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground -mr-2 hover:bg-muted">
-                                <MoreHorizontal className="h-5 w-5" />
-                              </Button>
+                            {/* FIX 2: Removed 'asChild' and the <Button> wrapper. Using a standard trigger guarantees the menu opens. */}
+                            <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
+                              <MoreHorizontal className="h-5 w-5" />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+
+                            {/* FIX 3: Added z-index and explicit background colors just in case it was opening behind the card */}
+                            <DropdownMenuContent align="end" className="w-40 z-50 bg-popover text-popover-foreground border shadow-md">
                               <DropdownMenuItem
-                                className="text-destructive focus:text-destructive cursor-pointer"
-                                onClick={() => {
+                                className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevents click events from bubbling up
                                   if (window.confirm("Are you sure you want to delete this post?")) {
                                     deletePost.mutate(post.id);
                                   }
