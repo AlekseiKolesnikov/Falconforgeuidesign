@@ -37,8 +37,8 @@ export function Feed() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [content, setContent] = useState('');
-  const [postToDelete, setPostToDelete] = useState<number | null>(null);
-  
+  const [postToDelete, setPostToDelete] = useState<any | null>(null);
+
   // New States for Comments
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
@@ -109,10 +109,25 @@ export function Feed() {
     }
   });
 
-  // 4. Delete post mutation
+  // 4. Delete post mutation (Now with image cleanup!)
   const deletePost = useMutation({
-    mutationFn: async (postId: number) => {
-      const { error } = await supabase.from('posts').delete().eq('id', postId);
+    mutationFn: async (post: any) => {
+      // 1. If the post has an image, delete it from the storage bucket first
+      if (post.image_url) {
+        // Extract the specific file path from the public URL
+        const pathMatches = post.image_url.match(/post_images\/(.+)$/);
+        if (pathMatches && pathMatches[1]) {
+          const filePath = pathMatches[1];
+          const { error: storageError } = await supabase.storage
+            .from('post_images')
+            .remove([filePath]);
+
+          if (storageError) console.error("Error deleting image file:", storageError);
+        }
+      }
+
+      // 2. Delete the actual post from the database
+      const { error } = await supabase.from('posts').delete().eq('id', post.id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts'] })
@@ -256,7 +271,7 @@ export function Feed() {
                               className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPostToDelete(post.id);
+                                setPostToDelete(post); // Pass the whole post here!
                               }}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -307,9 +322,9 @@ export function Feed() {
                   })()}
 
                   {/* Comment Toggle Button */}
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => toggleCommentSection(post.id)}
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none"
                   >
@@ -370,8 +385,8 @@ export function Feed() {
                           }
                         }}
                       />
-                      <Button 
-                        size="icon" 
+                      <Button
+                        size="icon"
                         className="shrink-0 rounded-full"
                         disabled={!commentInputs[post.id]?.trim() || createComment.isPending}
                         onClick={() => createComment.mutate({ postId: post.id, text: commentInputs[post.id] })}
@@ -386,7 +401,7 @@ export function Feed() {
           })}
         </div>
       </div>
-      
+
       {/* Premium Delete Confirmation Modal */}
       <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
         <AlertDialogContent>
