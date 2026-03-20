@@ -37,7 +37,7 @@ export function Feed() {
   const queryClient = useQueryClient();
   const [content, setContent] = useState('');
   const [postToDelete, setPostToDelete] = useState<any | null>(null);
-  
+
   // New Image Upload States
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -107,7 +107,7 @@ export function Feed() {
   const createPost = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id) throw new Error("No user ID found");
-      
+
       let imageUrl = null;
 
       // Upload the image to Supabase Storage if one is selected
@@ -115,17 +115,17 @@ export function Feed() {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${currentUser.id}/${fileName}`;
-        
+
         const { error: uploadError } = await supabase.storage
           .from('post_images')
           .upload(filePath, imageFile);
-          
+
         if (uploadError) throw uploadError;
-        
+
         const { data: publicUrlData } = supabase.storage
           .from('post_images')
           .getPublicUrl(filePath);
-          
+
         imageUrl = publicUrlData.publicUrl;
       }
 
@@ -136,14 +136,14 @@ export function Feed() {
       // Insert Post
       const { data: newPost, error: postError } = await supabase
         .from('posts')
-        .insert({ 
-          content: content.trim(), 
-          hashtags: extractedTags, 
+        .insert({
+          content: content.trim(),
+          hashtags: extractedTags,
           user_id: currentUser.id,
           image_url: imageUrl // Save the image link here
         })
         .select().single();
-      
+
       if (postError) throw postError;
 
       // Insert Tags
@@ -232,12 +232,12 @@ export function Feed() {
                   placeholder="What's new, Falcons? #Swim #Jobs #Montevallo"
                   className="min-h-[60px] resize-none border-none focus-visible:ring-0 px-0 text-lg placeholder:text-muted-foreground bg-transparent"
                 />
-                
+
                 {/* Image Preview Area */}
                 {imagePreview && (
                   <div className="relative mt-3 inline-block">
                     <img src={imagePreview} alt="Preview" className="max-h-64 rounded-lg object-cover border border-border" />
-                    <Button 
+                    <Button
                       variant="destructive" size="icon" className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-md"
                       onClick={clearImage}
                     >
@@ -252,23 +252,23 @@ export function Feed() {
           <CardFooter className="pt-3 pb-3 flex justify-between items-center bg-card rounded-b-xl">
             <div className="flex gap-1">
               {/* Hidden File Input */}
-              <input 
-                type="file" 
-                accept="image/png, image/jpeg, image/jpg, image/webp" 
-                className="hidden" 
+              <input
+                type="file"
+                accept="image/png, image/jpeg, image/jpg, image/webp"
+                className="hidden"
                 ref={fileInputRef}
                 onChange={handleImageSelect}
               />
-              
+
               {/* Photo Button */}
-              <Button 
+              <Button
                 variant="ghost" size="sm" className="text-muted-foreground rounded-full"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <ImageIcon className="h-5 w-5 mr-2" />Photo
               </Button>
             </div>
-            
+
             <Button
               onClick={() => createPost.mutate()}
               disabled={!session || createPost.isPending || (!content.trim() && !imageFile)}
@@ -348,14 +348,13 @@ export function Feed() {
                       {post.content}
                     </p>
                   )}
-
-                  {/* Render the uploaded image in the feed! */}
+                  {/* Render the uploaded image in the feed without cropping */}
                   {post.image_url && (
-                    <div className="mt-3 overflow-hidden rounded-xl border border-border">
-                      <img 
-                        src={post.image_url} 
-                        alt="Post attachment" 
-                        className="w-full h-auto max-h-[500px] object-cover"
+                    <div className="mt-3 aspect-auto overflow-hidden rounded-xl border border-border">
+                      <img
+                        src={post.image_url}
+                        alt="Post attachment"
+                        className="w-full h-auto max-h-[500px] object-contain" // <--- Change object-cover to object-contain
                         loading="lazy"
                       />
                     </div>
@@ -390,7 +389,7 @@ export function Feed() {
                     );
                   })()}
 
-                  <Button 
+                  <Button
                     variant="ghost" size="sm" onClick={() => setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none"
                   >
@@ -407,20 +406,20 @@ export function Feed() {
                         <p className="text-sm text-muted-foreground text-center py-2">No comments yet. Be the first to reply!</p>
                       ) : (
                         post.post_comments?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((comment: any) => (
-                            <div key={comment.id} className="flex gap-3">
-                              <Avatar className="w-8 h-8 shrink-0">
-                                <AvatarImage src={comment.users?.profile_photo_url} className="object-cover" />
-                                <AvatarFallback className="text-xs bg-primary text-primary-foreground">{comment.users?.first_name?.[0]}{comment.users?.last_name?.[0]}</AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 bg-background border shadow-sm rounded-lg p-3 text-sm">
-                                <div className="font-semibold text-foreground mb-1">
-                                  {comment.users?.first_name} {comment.users?.last_name}
-                                  <span className="text-xs text-muted-foreground font-normal ml-2">{new Date(comment.created_at).toLocaleDateString()}</span>
-                                </div>
-                                <p className="text-foreground whitespace-pre-wrap">{comment.content_text}</p>
+                          <div key={comment.id} className="flex gap-3">
+                            <Avatar className="w-8 h-8 shrink-0">
+                              <AvatarImage src={comment.users?.profile_photo_url} className="object-cover" />
+                              <AvatarFallback className="text-xs bg-primary text-primary-foreground">{comment.users?.first_name?.[0]}{comment.users?.last_name?.[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 bg-background border shadow-sm rounded-lg p-3 text-sm">
+                              <div className="font-semibold text-foreground mb-1">
+                                {comment.users?.first_name} {comment.users?.last_name}
+                                <span className="text-xs text-muted-foreground font-normal ml-2">{new Date(comment.created_at).toLocaleDateString()}</span>
                               </div>
+                              <p className="text-foreground whitespace-pre-wrap">{comment.content_text}</p>
                             </div>
-                          ))
+                          </div>
+                        ))
                       )}
                     </div>
 
@@ -446,7 +445,7 @@ export function Feed() {
           })}
         </div>
       </div>
-      
+
       <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
