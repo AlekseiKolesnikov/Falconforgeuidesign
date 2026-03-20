@@ -11,7 +11,7 @@ import { Input } from "../components/ui/input";
 import { Separator } from "../components/ui/separator";
 import {
   ThumbsUp, MessageCircle, MoreHorizontal,
-  Image as ImageIcon, Trash2, Send, X
+  Image as ImageIcon, Trash2, Send, X, Pencil
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,6 +46,10 @@ export function Feed() {
   // Comments States
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
+
+  // Edit Post States
+  const [editingPostId, setEditingPostId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   // 1. Fetch CURRENT user
   const { data: currentUser } = useQuery({
@@ -208,6 +212,28 @@ export function Feed() {
     }
   });
 
+  // 7. Update Post Mutation
+  const updatePost = useMutation({
+    mutationFn: async ({ postId, newContent }: { postId: number; newContent: string }) => {
+      const rawTags = newContent.match(/#[a-zA-Z0-9_]+/g) || [];
+      const extractedTags = rawTags.map(tag => tag.toLowerCase());
+
+      const { error } = await supabase
+        .from('posts')
+        .update({
+          content: newContent.trim(),
+          hashtags: extractedTags
+        })
+        .eq('id', postId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditingPostId(null); // Close the edit box
+      queryClient.invalidateQueries({ queryKey: ['posts'] }); // Refresh the feed
+    }
+  });
+
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
@@ -330,6 +356,17 @@ export function Feed() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40 z-50 bg-popover text-popover-foreground border shadow-md">
                             <DropdownMenuItem
+                              className="cursor-pointer flex items-center p-2 outline-none"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingPostId(post.id);
+                                setEditContent(post.content || '');
+                              }}
+                            >
+                              <Pencil className="mr-2 h-4 w-4" />
+                              <span>Edit Post</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
                               onClick={(e) => { e.stopPropagation(); setPostToDelete(post); }}
                             >
@@ -343,10 +380,33 @@ export function Feed() {
                 </CardHeader>
 
                 <CardContent className="pt-1 pb-4">
-                  {post.content && (
-                    <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3">
-                      {post.content}
-                    </p>
+                  {/* EDIT MODE VS VIEW MODE */}
+                  {editingPostId === post.id ? (
+                    <div className="space-y-3 mb-3 mt-2">
+                      <Textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="min-h-[100px] resize-none focus-visible:ring-1"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setEditingPostId(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => updatePost.mutate({ postId: post.id, newContent: editContent })}
+                          disabled={updatePost.isPending || !editContent.trim()}
+                        >
+                          {updatePost.isPending ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    post.content && (
+                      <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3">
+                        {post.content}
+                      </p>
+                    )
                   )}
                   {/* Render the uploaded image in the feed without cropping */}
                   {post.image_url && (
