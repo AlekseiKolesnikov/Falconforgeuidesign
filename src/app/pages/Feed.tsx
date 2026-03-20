@@ -1,5 +1,5 @@
 import { Badge } from "../components/ui/badge";
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { Navigation } from "../components/Navigation";
@@ -11,7 +11,7 @@ import { Input } from "../components/ui/input";
 import { Separator } from "../components/ui/separator";
 import {
   ThumbsUp, MessageCircle, MoreHorizontal,
-  Image as ImageIcon, Video, Trash2, Send
+  Image as ImageIcon, Trash2, Send, X
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -32,14 +32,18 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-
 export function Feed() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [content, setContent] = useState('');
   const [postToDelete, setPostToDelete] = useState<any | null>(null);
+  
+  // New Image Upload States
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // New States for Comments
+  // Comments States
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
 
@@ -58,7 +62,7 @@ export function Feed() {
     enabled: !!session?.user?.id,
   });
 
-  // 2. Posts query - Now pulling post_comments too!
+  // 2. Posts query
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['posts'],
     queryFn: async () => {
@@ -69,9 +73,7 @@ export function Feed() {
           users:user_id (id, first_name, last_name, profile_photo_url, headline),
           post_likes ( user_id ),
           post_comments (
-            id,
-            content_text,
-            created_at,
+            id, content_text, created_at,
             users:user_id (id, first_name, last_name, profile_photo_url)
           )
         `)
@@ -82,19 +84,69 @@ export function Feed() {
     }
   });
 
-  // 3. Create post mutation
+  // Handle Image Selection
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        alert("Image must be less than 5MB");
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // 3. Create post mutation (Now handles images!)
   const createPost = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id) throw new Error("No user ID found");
+      
+      let imageUrl = null;
+
+      // Upload the image to Supabase Storage if one is selected
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${currentUser.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('post_images')
+          .upload(filePath, imageFile);
+          
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('post_images')
+          .getPublicUrl(filePath);
+          
+        imageUrl = publicUrlData.publicUrl;
+      }
+
+      // Extract tags
       const rawTags = content.match(/#[a-zA-Z0-9_]+/g) || [];
       const extractedTags = rawTags.map(tag => tag.toLowerCase());
 
+      // Insert Post
       const { data: newPost, error: postError } = await supabase
         .from('posts')
-        .insert({ content: content.trim(), hashtags: extractedTags, user_id: currentUser.id })
+        .insert({ 
+          content: content.trim(), 
+          hashtags: extractedTags, 
+          user_id: currentUser.id,
+          image_url: imageUrl // Save the image link here
+        })
         .select().single();
+      
       if (postError) throw postError;
 
+      // Insert Tags
       if (extractedTags.length > 0) {
         for (const tagName of extractedTags) {
           const { data: tagData } = await supabase.from('tags').upsert({ name: tagName }, { onConflict: 'name' }).select().single();
@@ -105,28 +157,25 @@ export function Feed() {
     },
     onSuccess: () => {
       setContent('');
+      clearImage();
       queryClient.invalidateQueries({ queryKey: ['posts'] });
     }
   });
 
-  // 4. Delete post mutation (Now with image cleanup!)
+  // 4. Delete post mutation (With image cleanup)
   const deletePost = useMutation({
     mutationFn: async (post: any) => {
-      // 1. If the post has an image, delete it from the storage bucket first
+      // 1. Delete image from storage if it exists
       if (post.image_url) {
-        // Extract the specific file path from the public URL
         const pathMatches = post.image_url.match(/post_images\/(.+)$/);
         if (pathMatches && pathMatches[1]) {
           const filePath = pathMatches[1];
-          const { error: storageError } = await supabase.storage
-            .from('post_images')
-            .remove([filePath]);
-
+          const { error: storageError } = await supabase.storage.from('post_images').remove([filePath]);
           if (storageError) console.error("Error deleting image file:", storageError);
         }
       }
 
-      // 2. Delete the actual post from the database
+      // 2. Delete post from DB
       const { error } = await supabase.from('posts').delete().eq('id', post.id);
       if (error) throw error;
     },
@@ -136,13 +185,11 @@ export function Feed() {
   // 5. Toggle Like Mutation
   const toggleLike = useMutation({
     mutationFn: async ({ postId, hasLiked }: { postId: number; hasLiked: boolean }) => {
-      if (!currentUser?.id) throw new Error("Not logged in");
+      if (!currentUser?.id) return;
       if (hasLiked) {
-        const { error } = await supabase.from('post_likes').delete().match({ post_id: postId, user_id: currentUser.id });
-        if (error) throw error;
+        await supabase.from('post_likes').delete().match({ post_id: postId, user_id: currentUser.id });
       } else {
-        const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: currentUser.id });
-        if (error) throw error;
+        await supabase.from('post_likes').insert({ post_id: postId, user_id: currentUser.id });
       }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts'] })
@@ -151,24 +198,15 @@ export function Feed() {
   // 6. Create Comment Mutation
   const createComment = useMutation({
     mutationFn: async ({ postId, text }: { postId: number; text: string }) => {
-      if (!currentUser?.id) throw new Error("Not logged in");
-      const { error } = await supabase
-        .from('post_comments')
-        .insert({ post_id: postId, user_id: currentUser.id, content_text: text.trim() });
-      if (error) throw error;
+      if (!currentUser?.id) return;
+      await supabase.from('post_comments').insert({ post_id: postId, user_id: currentUser.id, content_text: text.trim() });
     },
     onSuccess: (_, variables) => {
-      // Clear the specific input box for this post
       setCommentInputs(prev => ({ ...prev, [variables.postId]: '' }));
-      // Ensure the comment section is open so they can see their new comment
       setExpandedComments(prev => ({ ...prev, [variables.postId]: true }));
       queryClient.invalidateQueries({ queryKey: ['posts'] });
     }
   });
-
-  const toggleCommentSection = (postId: number) => {
-    setExpandedComments(prev => ({ ...prev, [postId]: !prev[postId] }));
-  };
 
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
@@ -187,27 +225,53 @@ export function Feed() {
                   </AvatarFallback>
                 </Avatar>
               </Link>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="What's new, Falcons? #Swim #Jobs #Montevallo"
-                className="min-h-[60px] resize-none border-none focus-visible:ring-0 px-0 text-lg placeholder:text-muted-foreground bg-transparent"
-              />
+              <div className="flex-1">
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="What's new, Falcons? #Swim #Jobs #Montevallo"
+                  className="min-h-[60px] resize-none border-none focus-visible:ring-0 px-0 text-lg placeholder:text-muted-foreground bg-transparent"
+                />
+                
+                {/* Image Preview Area */}
+                {imagePreview && (
+                  <div className="relative mt-3 inline-block">
+                    <img src={imagePreview} alt="Preview" className="max-h-64 rounded-lg object-cover border border-border" />
+                    <Button 
+                      variant="destructive" size="icon" className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-md"
+                      onClick={clearImage}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </CardHeader>
           <Separator />
           <CardFooter className="pt-3 pb-3 flex justify-between items-center bg-card rounded-b-xl">
             <div className="flex gap-1">
-              <Button variant="ghost" size="sm" className="text-muted-foreground rounded-full">
+              {/* Hidden File Input */}
+              <input 
+                type="file" 
+                accept="image/png, image/jpeg, image/jpg, image/webp" 
+                className="hidden" 
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+              />
+              
+              {/* Photo Button */}
+              <Button 
+                variant="ghost" size="sm" className="text-muted-foreground rounded-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 <ImageIcon className="h-5 w-5 mr-2" />Photo
               </Button>
-              <Button variant="ghost" size="sm" className="text-muted-foreground rounded-full">
-                <Video className="h-5 w-5 mr-2" />Video
-              </Button>
             </div>
+            
             <Button
               onClick={() => createPost.mutate()}
-              disabled={!session || createPost.isPending || !content.trim()}
+              disabled={!session || createPost.isPending || (!content.trim() && !imageFile)}
               className="rounded-full px-6 font-semibold"
             >
               {createPost.isPending ? 'Posting...' : 'Post'}
@@ -230,7 +294,6 @@ export function Feed() {
             const postDate = new Date(post.created_at).toLocaleString('en-US', {
               month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
             });
-            const commentCount = post.post_comments?.length || 0;
 
             return (
               <Card key={post.id} className="shadow-sm border-0 overflow-hidden">
@@ -260,7 +323,6 @@ export function Feed() {
 
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground sm:hidden">{new Date(post.created_at).toLocaleDateString()}</span>
-
                       {currentUser?.id == post.user_id && (
                         <DropdownMenu>
                           <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
@@ -269,13 +331,9 @@ export function Feed() {
                           <DropdownMenuContent align="end" className="w-40 z-50 bg-popover text-popover-foreground border shadow-md">
                             <DropdownMenuItem
                               className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPostToDelete(post); // Pass the whole post here!
-                              }}
+                              onClick={(e) => { e.stopPropagation(); setPostToDelete(post); }}
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete Post</span>
+                              <Trash2 className="mr-2 h-4 w-4" /><span>Delete Post</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -285,7 +343,23 @@ export function Feed() {
                 </CardHeader>
 
                 <CardContent className="pt-1 pb-4">
-                  <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed">{post.content}</p>
+                  {post.content && (
+                    <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3">
+                      {post.content}
+                    </p>
+                  )}
+
+                  {/* Render the uploaded image in the feed! */}
+                  {post.image_url && (
+                    <div className="mt-3 overflow-hidden rounded-xl border border-border">
+                      <img 
+                        src={post.image_url} 
+                        alt="Post attachment" 
+                        className="w-full h-auto max-h-[500px] object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
 
                   {post.hashtags?.length > 0 && (
                     <div className="flex gap-2 mt-4 flex-wrap">
@@ -301,18 +375,13 @@ export function Feed() {
                 <Separator />
 
                 <CardFooter className="py-2 px-2 flex gap-1 bg-card">
-                  {/* Likes Button */}
                   {(() => {
                     const likeCount = post.post_likes?.length || 0;
                     const hasLiked = post.post_likes?.some((like: any) => like.user_id === currentUser?.id);
                     const isLiking = toggleLike.isPending && toggleLike.variables?.postId === post.id;
-
                     return (
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleLike.mutate({ postId: post.id, hasLiked })}
-                        disabled={isLiking}
+                        variant="ghost" size="sm" onClick={() => toggleLike.mutate({ postId: post.id, hasLiked })} disabled={isLiking}
                         className={`flex-1 sm:flex-none transition-colors ${hasLiked ? 'text-blue-600 font-semibold hover:text-blue-700 hover:bg-blue-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                       >
                         <ThumbsUp className={`h-4 w-4 mr-2 ${hasLiked ? 'fill-current' : ''} ${isLiking ? 'animate-pulse' : ''}`} />
@@ -321,43 +390,32 @@ export function Feed() {
                     );
                   })()}
 
-                  {/* Comment Toggle Button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleCommentSection(post.id)}
+                  <Button 
+                    variant="ghost" size="sm" onClick={() => setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none"
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
-                    {commentCount > 0 ? commentCount : 'Comment'}
+                    {post.post_comments?.length > 0 ? post.post_comments.length : 'Comment'}
                   </Button>
                 </CardFooter>
 
-                {/* THE NEW COMMENTS SECTION */}
+                {/* Comments Section */}
                 {expandedComments[post.id] && (
                   <div className="px-4 pb-4 pt-2 bg-muted/20 border-t border-border">
-                    {/* Render existing comments */}
                     <div className="space-y-4 mb-4 mt-2">
                       {post.post_comments?.length === 0 ? (
                         <p className="text-sm text-muted-foreground text-center py-2">No comments yet. Be the first to reply!</p>
                       ) : (
-                        post.post_comments
-                          // Sort comments from oldest to newest
-                          ?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                          .map((comment: any) => (
+                        post.post_comments?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((comment: any) => (
                             <div key={comment.id} className="flex gap-3">
                               <Avatar className="w-8 h-8 shrink-0">
                                 <AvatarImage src={comment.users?.profile_photo_url} className="object-cover" />
-                                <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                                  {comment.users?.first_name?.[0]}{comment.users?.last_name?.[0]}
-                                </AvatarFallback>
+                                <AvatarFallback className="text-xs bg-primary text-primary-foreground">{comment.users?.first_name?.[0]}{comment.users?.last_name?.[0]}</AvatarFallback>
                               </Avatar>
                               <div className="flex-1 bg-background border shadow-sm rounded-lg p-3 text-sm">
                                 <div className="font-semibold text-foreground mb-1">
                                   {comment.users?.first_name} {comment.users?.last_name}
-                                  <span className="text-xs text-muted-foreground font-normal ml-2">
-                                    {new Date(comment.created_at).toLocaleDateString()}
-                                  </span>
+                                  <span className="text-xs text-muted-foreground font-normal ml-2">{new Date(comment.created_at).toLocaleDateString()}</span>
                                 </div>
                                 <p className="text-foreground whitespace-pre-wrap">{comment.content_text}</p>
                               </div>
@@ -366,31 +424,18 @@ export function Feed() {
                       )}
                     </div>
 
-                    {/* Input to write a new comment */}
                     <div className="flex gap-2 items-center">
                       <Avatar className="w-8 h-8 shrink-0 hidden sm:block">
                         <AvatarImage src={currentUser?.profile_photo_url} className="object-cover" />
-                        <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                          {currentUser?.first_name?.[0]}{currentUser?.last_name?.[0]}
-                        </AvatarFallback>
+                        <AvatarFallback className="text-xs bg-primary text-primary-foreground">{currentUser?.first_name?.[0]}{currentUser?.last_name?.[0]}</AvatarFallback>
                       </Avatar>
                       <Input
-                        value={commentInputs[post.id] || ''}
-                        onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                        placeholder="Write a comment..."
-                        className="flex-1 bg-background"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && commentInputs[post.id]?.trim()) {
-                            createComment.mutate({ postId: post.id, text: commentInputs[post.id] });
-                          }
-                        }}
+                        value={commentInputs[post.id] || ''} onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                        placeholder="Write a comment..." className="flex-1 bg-background"
+                        onKeyDown={(e) => { if (e.key === 'Enter' && commentInputs[post.id]?.trim()) createComment.mutate({ postId: post.id, text: commentInputs[post.id] }); }}
                       />
-                      <Button
-                        size="icon"
-                        className="shrink-0 rounded-full"
-                        disabled={!commentInputs[post.id]?.trim() || createComment.isPending}
-                        onClick={() => createComment.mutate({ postId: post.id, text: commentInputs[post.id] })}
-                      >
+                      <Button size="icon" className="shrink-0 rounded-full" disabled={!commentInputs[post.id]?.trim() || createComment.isPending}
+                        onClick={() => createComment.mutate({ postId: post.id, text: commentInputs[post.id] })}>
                         <Send className="h-4 w-4" />
                       </Button>
                     </div>
@@ -401,29 +446,16 @@ export function Feed() {
           })}
         </div>
       </div>
-
-      {/* Premium Delete Confirmation Modal */}
+      
       <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your post from the Falcon Forge feed.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This action cannot be undone. This will permanently delete your post.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (postToDelete) {
-                  deletePost.mutate(postToDelete);
-                  setPostToDelete(null);
-                }
-              }}
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (postToDelete) { deletePost.mutate(postToDelete); setPostToDelete(null); } }}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
