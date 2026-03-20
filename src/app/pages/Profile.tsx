@@ -74,7 +74,7 @@ export function Profile() {
         const { data: eduData } = await supabase.from("education").select("*").eq("user_id", userData.id);
         const { data: expData } = await supabase.from("experiences").select("*").eq("user_id", userData.id).order("end_date", { ascending: false });
         const { data: skillsData } = await supabase.from("user_skills").select("proficiency_level, skills(name)").eq("user_id", userData.id);
-        
+
         setEducation(eduData || []);
         setExperiences(expData || []);
         // @ts-ignore
@@ -122,12 +122,12 @@ export function Profile() {
     try {
       const fileExt = file.name.split('.').pop();
       const filePath = `${profile.id}/${type}_${Math.random()}.${fileExt}`;
-      
+
       await supabase.storage.from('profile_images').upload(filePath, file);
       const { data } = supabase.storage.from('profile_images').getPublicUrl(filePath);
-      
-      const updateData = type === 'avatar' 
-        ? { profile_photo_url: data.publicUrl } 
+
+      const updateData = type === 'avatar'
+        ? { profile_photo_url: data.publicUrl }
         : { banner_url: data.publicUrl };
 
       await supabase.from('users').update(updateData).eq('id', profile.id);
@@ -164,14 +164,14 @@ export function Profile() {
 
       {/* SINGLE COLUMN LAYOUT (Max width 4xl for LinkedIn style) */}
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
-        
+
         {/* 1. HEADER CARD */}
         <Card className="overflow-hidden shadow-sm border-0">
           {/* Cover Image */}
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
             <input type="file" hidden ref={bannerInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="icon" className="absolute top-4 right-4 rounded-full shadow-md z-10">
@@ -179,8 +179,11 @@ export function Profile() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => bannerInputRef.current?.click()} className="cursor-pointer">
-                   <Camera className="mr-2 h-4 w-4" /> Change Cover
+                <DropdownMenuItem
+                  onSelect={(e) => { e.preventDefault(); bannerInputRef.current?.click(); }}
+                  className="cursor-pointer"
+                >
+                  <Camera className="mr-2 h-4 w-4" /> Change Cover
                 </DropdownMenuItem>
                 {profile.banner_url && (
                   <DropdownMenuItem onClick={() => deleteImage('banner')} className="cursor-pointer text-destructive focus:text-destructive">
@@ -200,7 +203,7 @@ export function Profile() {
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
                 <input type="file" hidden ref={avatarInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
-                
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="icon" variant="secondary" className="absolute bottom-2 right-2 h-9 w-9 rounded-full shadow-md">
@@ -208,11 +211,14 @@ export function Profile() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
-                    <DropdownMenuItem onClick={() => avatarInputRef.current?.click()} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onSelect={(e) => { e.preventDefault(); avatarInputRef.current?.click(); }}
+                      className="cursor-pointer"
+                    >
                       <Camera className="mr-2 h-4 w-4" /> Upload Photo
                     </DropdownMenuItem>
                     {profile.profile_photo_url && (
-                      <DropdownMenuItem onClick={() => deleteImage('avatar')} className="cursor-pointer text-destructive focus:text-destructive">
+                      <DropdownMenuItem onSelect={() => deleteImage('avatar')} className="cursor-pointer text-destructive focus:text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" /> Remove Photo
                       </DropdownMenuItem>
                     )}
@@ -233,7 +239,7 @@ export function Profile() {
                 {profile.is_verified && <span className="text-blue-500 ml-2 text-xl" title="Verified">✅</span>}
               </h1>
               <p className="text-lg text-foreground mt-1">{profile.headline || "Student at University of Montevallo"}</p>
-              
+
               <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{profile.location || "Montevallo, Alabama"}</span>
                 <span className="flex items-center gap-1.5"><Mail className="h-4 w-4" />{profile.email}</span>
@@ -250,7 +256,7 @@ export function Profile() {
             <p className="text-foreground leading-relaxed whitespace-pre-wrap">
               {profile.bio || "No bio added yet."}
             </p>
-            
+
             {skills.length > 0 && (
               <div className="mt-6">
                 <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -293,8 +299,8 @@ export function Profile() {
                       </div>
                     )}
                     <CardFooter className="p-3 bg-muted/30 flex gap-4 text-xs text-muted-foreground mt-auto">
-                      <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3"/> {post.post_likes?.length || 0}</span>
-                      <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3"/> {post.post_comments?.length || 0} comments</span>
+                      <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3" /> {post.post_likes?.length || 0}</span>
+                      <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {post.post_comments?.length || 0} comments</span>
                     </CardFooter>
                   </Card>
                 ))}
@@ -353,12 +359,12 @@ export function Profile() {
           <DialogHeader><DialogTitle>Edit Profile Info</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({...editForm, first_name: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.last_name} onChange={(e) => setEditForm({...editForm, last_name: e.target.value})} /></div>
+              <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} /></div>
             </div>
-            <div className="space-y-2"><Label>Headline</Label><Input value={editForm.headline} onChange={(e) => setEditForm({...editForm, headline: e.target.value})} /></div>
-            <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({...editForm, location: e.target.value})} /></div>
-            <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({...editForm, bio: e.target.value})} /></div>
+            <div className="space-y-2"><Label>Headline</Label><Input value={editForm.headline} onChange={(e) => setEditForm({ ...editForm, headline: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditProfileOpen(false)}>Cancel</Button>
