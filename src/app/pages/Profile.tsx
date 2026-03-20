@@ -22,6 +22,11 @@ import {
   Share2,
   MoreHorizontal,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Textarea } from "../components/ui/textarea";
 
 // --- INTERFACES ---
 interface ProfileData {
@@ -62,6 +67,45 @@ export function Profile() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [university, setUniversity] = useState("");
   const [loading, setLoading] = useState(true);
+
+  const queryClient = useQueryClient();
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    first_name: "", last_name: "", headline: "", bio: "", major: ""
+  });
+
+  // Open the modal and pre-fill the current data
+  const openEditProfile = () => {
+    if (profile) {
+      setEditForm({
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        headline: profile.headline || "",
+        bio: profile.bio || "",
+        major: profile.major || ""
+      });
+      setIsEditProfileOpen(true);
+    }
+  };
+
+  // The mutation to save changes to Supabase
+  const updateProfileMutation = useMutation({
+    mutationFn: async (formData: typeof editForm) => {
+      const { error } = await supabase
+        .from('users')
+        .update(formData)
+        .eq('id', profile?.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setIsEditProfileOpen(false);
+      fetchProfile(); // Refresh the screen with new data
+    },
+    onError: (error) => {
+      console.error("Failed to update profile:", error);
+      alert("Failed to update profile.");
+    }
+  });
 
   useEffect(() => {
     fetchProfile();
@@ -158,7 +202,7 @@ export function Profile() {
   }
 
   // Format Join Date
-  const joinedDate = profile.created_at 
+  const joinedDate = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : "Recently";
 
@@ -177,7 +221,7 @@ export function Profile() {
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-primary/20 via-primary/40 to-primary/60" />
-            
+
             <Button variant="secondary" size="sm" className="absolute top-4 right-4 gap-2">
               <Edit className="h-4 w-4" />
               Edit Cover
@@ -212,7 +256,7 @@ export function Profile() {
                       {profile.headline || `${profile.major || "Student"} ${profile.graduation_year ? `'${String(profile.graduation_year).slice(-2)}` : ''}`}
                     </p>
                   </div>
-                  
+
                   {/* Quick Info */}
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1.5">
@@ -241,8 +285,9 @@ export function Profile() {
                 <Button variant="outline" size="lg">
                   <Share2 className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="lg">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button variant="secondary" size="lg" className="gap-2" onClick={openEditProfile}>
+                  <Edit className="h-4 w-4" />
+                  Edit Profile
                 </Button>
               </div>
             </div>
@@ -277,7 +322,7 @@ export function Profile() {
         <div className="grid lg:grid-cols-3 gap-6 mt-6">
           {/* Left Column - About & Contact */}
           <div className="lg:col-span-1 space-y-6">
-            
+
             {/* About Card */}
             <Card className="shadow-md border-0">
               <CardHeader>
@@ -287,9 +332,9 @@ export function Profile() {
                 <p className="text-foreground leading-relaxed whitespace-pre-wrap">
                   {profile.bio || "No bio added yet. Tell people about yourself!"}
                 </p>
-                
+
                 <Separator />
-                
+
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
                     <Mail className="h-5 w-5 text-primary mt-0.5" />
@@ -318,9 +363,8 @@ export function Profile() {
                 <div className="space-y-4">
                   {recentActivity.map((activity, i) => (
                     <div key={i} className="flex gap-3">
-                      <div className={`h-2 w-2 rounded-full mt-2 ${
-                        activity.type === 'post' ? 'bg-primary' : 'bg-secondary'
-                      }`} />
+                      <div className={`h-2 w-2 rounded-full mt-2 ${activity.type === 'post' ? 'bg-primary' : 'bg-secondary'
+                        }`} />
                       <div className="flex-1">
                         <p className="text-sm">{activity.title}</p>
                         <p className="text-xs text-muted-foreground mt-1">{activity.time}</p>
@@ -350,7 +394,7 @@ export function Profile() {
               {/* Experience Tab */}
               <TabsContent value="experience" className="space-y-4">
                 {experiences.length === 0 ? (
-                   <Card className="shadow-md border-0"><CardContent className="p-8 text-center text-muted-foreground">No experience added yet.</CardContent></Card>
+                  <Card className="shadow-md border-0"><CardContent className="p-8 text-center text-muted-foreground">No experience added yet.</CardContent></Card>
                 ) : (
                   experiences.map((exp, i) => (
                     <Card key={i} className="shadow-md hover:shadow-lg transition-shadow border-0">
@@ -390,7 +434,7 @@ export function Profile() {
               {/* Education Tab */}
               <TabsContent value="education" className="space-y-4">
                 {education.length === 0 ? (
-                   <Card className="shadow-md border-0"><CardContent className="p-8 text-center text-muted-foreground">No education added yet.</CardContent></Card>
+                  <Card className="shadow-md border-0"><CardContent className="p-8 text-center text-muted-foreground">No education added yet.</CardContent></Card>
                 ) : (
                   education.map((edu, i) => (
                     <Card key={i} className="shadow-md border-0">
@@ -407,7 +451,7 @@ export function Profile() {
                                 <span>{edu.start_year || ''} {edu.start_year && edu.end_year ? '-' : ''} {edu.end_year || ''}</span>
                               </div>
                             </div>
-                            
+
                             {edu.description && (
                               <>
                                 <Separator />
@@ -442,11 +486,11 @@ export function Profile() {
                               <div className="flex items-center gap-3">
                                 <span className="font-medium">{skill.name}</span>
                                 {skill.proficiency_level && (
-                                  <Badge 
+                                  <Badge
                                     variant={
                                       skill.proficiency_level.toLowerCase() === "advanced" || skill.proficiency_level.toLowerCase() === "expert" ? "default" :
-                                      skill.proficiency_level.toLowerCase() === "intermediate" ? "secondary" :
-                                      "outline"
+                                        skill.proficiency_level.toLowerCase() === "intermediate" ? "secondary" :
+                                          "outline"
                                     }
                                     className="text-xs"
                                   >
@@ -457,11 +501,11 @@ export function Profile() {
                             </div>
                             {/* Visual Progress Bar based on level */}
                             <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
+                              <div
                                 className={`h-full bg-primary/70`}
-                                style={{ 
+                                style={{
                                   width: (skill.proficiency_level?.toLowerCase() === "advanced" || skill.proficiency_level?.toLowerCase() === "expert") ? "100%" :
-                                         (skill.proficiency_level?.toLowerCase() === "intermediate") ? "70%" : "40%" 
+                                    (skill.proficiency_level?.toLowerCase() === "intermediate") ? "70%" : "40%"
                                 }}
                               />
                             </div>
@@ -476,6 +520,52 @@ export function Profile() {
           </div>
         </div>
       </div>
+      {/* EDIT PROFILE MODAL */}
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Profile Information</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>First Name</Label>
+                <Input value={editForm.first_name} onChange={(e) => setEditForm({...editForm, first_name: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Last Name</Label>
+                <Input value={editForm.last_name} onChange={(e) => setEditForm({...editForm, last_name: e.target.value})} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Headline</Label>
+              <Input placeholder="e.g. Senior Swimmer | Business Management" value={editForm.headline} onChange={(e) => setEditForm({...editForm, headline: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Major</Label>
+              <Input placeholder="e.g. Computer Science" value={editForm.major} onChange={(e) => setEditForm({...editForm, major: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Bio</Label>
+              <Textarea 
+                className="min-h-[100px]" 
+                placeholder="Tell people about yourself..."
+                value={editForm.bio} 
+                onChange={(e) => setEditForm({...editForm, bio: e.target.value})} 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditProfileOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => updateProfileMutation.mutate(editForm)} 
+              disabled={updateProfileMutation.isPending}
+            >
+              {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
