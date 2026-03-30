@@ -196,7 +196,7 @@ export function Profile() {
                 </Avatar>
                 
                 {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
-                <div className="absolute bottom-2 -right-3 flex gap-2 z-10">
+                <div className="absolute bottom-2 -right-1 flex gap-2 z-10">
                   <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
                     <Camera className="h-4 w-4" />
                     <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
