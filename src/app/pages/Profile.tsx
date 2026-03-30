@@ -333,26 +333,43 @@ export function Profile() {
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
-      {/* MOVE ALERT DIALOG HERE - TOP LEVEL */}
-      <AlertDialog open={postToDelete !== null} onOpenChange={(open) => !open && setPostToDelete(null)}>
-        <AlertDialogContent className="z-[100]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your post.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPostToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white"
-              onClick={() => deletePostMutation.mutate(postToDelete.id)}
+
+      {/* MODAL: DELETE CONFIRMATION (Using Dialog instead of AlertDialog) */}
+      <Dialog open={postToDelete !== null} onOpenChange={(open) => !open && setPostToDelete(null)}>
+        <DialogContent className="sm:max-w-[400px] p-6 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-destructive">Delete Post?</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p className="text-muted-foreground">
+              Are you sure you want to delete this post? This action cannot be undone.
+            </p>
+          </div>
+
+          <DialogFooter className="flex gap-3 sm:justify-end">
+            <Button
+              variant="outline"
+              className="rounded-full px-6"
+              onClick={() => setPostToDelete(null)}
             >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-full px-6"
+              disabled={deletePostMutation.isPending}
+              onClick={() => {
+                if (postToDelete?.id) {
+                  deletePostMutation.mutate(postToDelete.id);
+                }
+              }}
+            >
+              {deletePostMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* 1. HEADER CARD */}
@@ -502,25 +519,23 @@ export function Profile() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="end"
-                              onCloseAutoFocus={(e) => e.preventDefault()} // Add this line!
-                            >
+                            <DropdownMenuContent align="end">
                               <DropdownMenuItem
                                 className="cursor-pointer"
-                                onSelect={(e) => e.preventDefault()} // Prevents the dropdown from closing instantly
-                                onClick={() => {
+                                onSelect={() => {
                                   setEditingPostId(post.id);
                                   setEditPostContent(post.content || "");
                                 }}
                               >
-                                <Pencil className="mr-2 h-4 w-4" /> Edit
+                                <Pencil className="mr-2 h-4 w-4" /> Edit Post
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
                                 className="text-destructive cursor-pointer"
-                                onSelect={(e) => e.preventDefault()}
-                                onClick={() => setPostToDelete(post)}
+                                onSelect={() => {
+                                  // Use a tiny timeout to ensure the dropdown closes before the state change
+                                  setTimeout(() => setPostToDelete(post), 100);
+                                }}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Post
                               </DropdownMenuItem>
