@@ -482,28 +482,25 @@ export function Profile() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent
+                              align="end"
+                              onCloseAutoFocus={(e) => e.preventDefault()} // This stops the dropdown from stealing focus back
+                            >
                               <DropdownMenuItem
                                 className="cursor-pointer"
-                                onSelect={() => {
-                                  // THE FIX: Tiny delay lets the dropdown close properly first
-                                  setTimeout(() => {
-                                    setEditingPostId(post.id);
-                                    setEditPostContent(post.content);
-                                  }, 100);
+                                onSelect={(e) => e.preventDefault()} // Prevents the dropdown from closing instantly
+                                onClick={() => {
+                                  setEditingPostId(post.id);
+                                  setEditPostContent(post.content || "");
                                 }}
                               >
                                 <Pencil className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
-                                className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
-                                onSelect={() => {
-                                  // THE FIX: Tiny delay ensures the AlertDialog doesn't get blocked
-                                  setTimeout(() => {
-                                    setPostToDelete(post);
-                                  }, 100);
-                                }}
+                                className="text-destructive cursor-pointer"
+                                onSelect={(e) => e.preventDefault()}
+                                onClick={() => setPostToDelete(post)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Post
                               </DropdownMenuItem>
@@ -733,24 +730,20 @@ export function Profile() {
         </DialogContent>
       </Dialog>
 
-      {/* DELETE CONFIRMATION DIALOG - Placed at the very bottom */}
-      <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
-        <AlertDialogContent>
+      {/* MOVE ALERT DIALOG HERE - TOP LEVEL */}
+      <AlertDialog open={postToDelete !== null} onOpenChange={(open) => !open && setPostToDelete(null)}>
+        <AlertDialogContent className="z-[100]">
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your post from your profile.
+              This action cannot be undone. This will permanently delete your post.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPostToDelete(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (postToDelete) {
-                  deletePostMutation.mutate(postToDelete.id);
-                }
-              }}
+              className="bg-destructive text-white"
+              onClick={() => deletePostMutation.mutate(postToDelete.id)}
             >
               Delete
             </AlertDialogAction>
