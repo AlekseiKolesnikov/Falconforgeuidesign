@@ -270,28 +270,20 @@ export function Profile() {
   const createPostMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id || !newPostContent.trim()) return;
-
       let imageUrl = null;
       if (newPostImage) {
         const fileExt = newPostImage.name.split('.').pop();
         const filePath = `${profile.id}/post_${Math.random()}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('post_images')
-          .upload(filePath, newPostImage);
-
+        const { error: uploadError } = await supabase.storage.from('post_images').upload(filePath, newPostImage);
         if (uploadError) throw uploadError;
-
         const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
         imageUrl = data.publicUrl;
       }
-
       const { error } = await supabase.from('posts').insert({
         user_id: profile.id,
         content: newPostContent,
         image_url: imageUrl,
       });
-
       if (error) throw error;
     },
     onSuccess: () => {
