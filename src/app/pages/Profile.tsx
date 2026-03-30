@@ -483,12 +483,27 @@ export function Profile() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onSelect={() => { setEditingPostId(post.id); setEditPostContent(post.content); }}>
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onSelect={() => {
+                                  // THE FIX: Tiny delay lets the dropdown close properly first
+                                  setTimeout(() => {
+                                    setEditingPostId(post.id);
+                                    setEditPostContent(post.content);
+                                  }, 100);
+                                }}
+                              >
                                 <Pencil className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
+
                               <DropdownMenuItem
                                 className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
-                                onSelect={() => setPostToDelete(post)} // This opens the AlertDialog above
+                                onSelect={() => {
+                                  // THE FIX: Tiny delay ensures the AlertDialog doesn't get blocked
+                                  setTimeout(() => {
+                                    setPostToDelete(post);
+                                  }, 100);
+                                }}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Post
                               </DropdownMenuItem>
