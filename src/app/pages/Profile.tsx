@@ -484,7 +484,7 @@ export function Profile() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                               align="end"
-                              onCloseAutoFocus={(e) => e.preventDefault()} // This stops the dropdown from stealing focus back
+                              onCloseAutoFocus={(e) => e.preventDefault()} // Add this line!
                             >
                               <DropdownMenuItem
                                 className="cursor-pointer"
