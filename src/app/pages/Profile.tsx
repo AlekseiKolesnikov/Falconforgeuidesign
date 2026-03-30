@@ -455,7 +455,7 @@ export function Profile() {
                   <Card key={post.id} className="border border-border shadow-none overflow-hidden flex flex-col relative group">
                     <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
                       <p className="text-sm text-foreground line-clamp-2 pr-4">{post.content}</p>
-                      
+
                       {/* Edit/Delete Dropdown */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -464,16 +464,23 @@ export function Profile() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {
-                            setEditingPost(post);
-                            setEditPostContent(post.content);
-                            setIsEditPostOpen(true);
-                          }}>
+
+                          {/* Changed onClick to onSelect! */}
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onSelect={() => {
+                              setEditingPost(post);
+                              setEditPostContent(post.content);
+                              setIsEditPostOpen(true);
+                            }}
+                          >
                             <Edit className="mr-2 h-4 w-4" /> Edit Post
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                            onClick={() => {
+
+                          {/* Changed onClick to onSelect! */}
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                            onSelect={() => {
                               if (window.confirm("Are you sure you want to delete this post?")) {
                                 deletePostMutation.mutate(post.id);
                               }
@@ -481,6 +488,7 @@ export function Profile() {
                           >
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Post
                           </DropdownMenuItem>
+
                         </DropdownMenuContent>
                       </DropdownMenu>
 
@@ -616,7 +624,7 @@ export function Profile() {
             <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
             </Button>
-            
+
             <div className="flex gap-3 justify-end items-center">
               <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm whitespace-nowrap h-10 w-[140px] shrink-0 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
                 <Camera className="mr-2 h-4 w-4 shrink-0" /> Upload New
