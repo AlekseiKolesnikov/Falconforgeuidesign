@@ -170,7 +170,9 @@ export function Profile() {
           {/* Cover Image */}
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-            <input type="file" hidden ref={bannerInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
+            
+            {/* Hidden Input outside the dropdown */}
+            <input type="file" className="hidden" ref={bannerInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -180,8 +182,11 @@ export function Profile() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  onSelect={(e) => { e.preventDefault(); bannerInputRef.current?.click(); }}
                   className="cursor-pointer"
+                  onSelect={(e) => { 
+                    e.preventDefault(); 
+                    setTimeout(() => bannerInputRef.current?.click(), 10); 
+                  }}
                 >
                   <Camera className="mr-2 h-4 w-4" /> Change Cover
                 </DropdownMenuItem>
@@ -202,18 +207,23 @@ export function Profile() {
                   <AvatarImage src={profile.profile_photo_url} className="object-cover" />
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
-                <input type="file" hidden ref={avatarInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
+                
+                {/* Hidden Input outside the dropdown */}
+                <input type="file" className="hidden" ref={avatarInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="secondary" className="absolute bottom-2 right-2 h-9 w-9 rounded-full shadow-md">
+                    <Button size="icon" variant="secondary" className="absolute bottom-2 right-2 h-9 w-9 rounded-full shadow-md z-10">
                       <Camera className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuItem
-                      onSelect={(e) => { e.preventDefault(); avatarInputRef.current?.click(); }}
                       className="cursor-pointer"
+                      onSelect={(e) => { 
+                        e.preventDefault(); 
+                        setTimeout(() => avatarInputRef.current?.click(), 10); 
+                      }}
                     >
                       <Camera className="mr-2 h-4 w-4" /> Upload Photo
                     </DropdownMenuItem>
