@@ -161,12 +161,7 @@ export function Profile() {
     queryKey: ['userPosts', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return [];
-      const { data } = await supabase
-        .from('posts')
-        .select(`*, post_likes(user_id), post_comments(id)`)
-        .eq('user_id', profile.id)
-        .order('created_at', { ascending: false })
-        .limit(4);
+      const { data } = await supabase.from('posts').select(`*, post_likes(user_id), post_comments(id)`).eq('user_id', profile.id).order('created_at', { ascending: false }).limit(4);
       return data || [];
     },
     enabled: !!profile?.id,
@@ -303,7 +298,7 @@ export function Profile() {
     },
     onSuccess: () => { setEditingPostId(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
   });
-  
+
   // Early returns must stay AFTER the hooks above
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
