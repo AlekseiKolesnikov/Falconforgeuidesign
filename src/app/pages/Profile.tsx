@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
+import * as React from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { Navigation } from "../components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "../components/ui/card";
@@ -10,15 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-// NEW IMPORTS: useQuery for activity, and Slider + icons for Positioning modal
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
 import {
   MapPin, Mail, Calendar, Briefcase, GraduationCap,
-  TrendingUp, Users, Share2, Edit, Camera, Trash2, ThumbsUp, MessageCircle
+  TrendingUp, Users, Share2, Edit, Camera, Trash2, ThumbsUp, MessageCircle, Pencil
 } from "lucide-react";
-// NEW: Dropdown Menu is only for other options, not uploads now.
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
+import Cropper from 'react-easy-crop';
+import 'react-easy-crop/react-easy-crop.css';
 
 // --- INTERFACES ---
 interface ProfileData {
@@ -43,12 +43,44 @@ interface ProfileData {
 
 const FALLBACK_COVER = "https://images.unsplash.com/photo-1759889392274-246af1a984ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx1bml2ZXJzaXR5JTIwY2FtcHVzJTIwcHVycGxlJTIwYnVpbGRpbmd8ZW58MXx8fHwxNzczMDAwMjgyfDA&ixlib=rb-4.1.0&q=80&w=1080";
 
+// --- UTILITY: Generate Cropped Image Blob ---
+const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob> => {
+  const image = new Image();
+  image.src = imageSrc;
+  await image.decode();
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) throw new Error("Could not create canvas context");
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+  
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Canvas is empty"));
+    }, 'image/jpeg', 0.95);
+  });
+};
+
 export function Profile() {
   const queryClient = useQueryClient();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
-  // NEW: Ref for canvas if using an image editor library
-  const imageEditorRef = useRef<any>(null);
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [education, setEducation] = useState<any[]>([]);
@@ -56,16 +88,18 @@ export function Profile() {
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Profile Edit Modal State
+  // Modals State
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     first_name: "", last_name: "", headline: "", bio: "", major: "", location: ""
   });
 
-  // NEW: Image Position Modal State
+  // Image Cropper State
   const [isPositionImageOpen, setIsPositionImageOpen] = useState(false);
-  // Conceptual state for manual transform if not using a library
-  const [imageTransform, setImageTransform] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
   // --- QUERIES ---
   const fetchProfile = async () => {
@@ -81,7 +115,6 @@ export function Profile() {
 
       if (userData) {
         setProfile(userData);
-        // Fetch relations
         const { data: eduData } = await supabase.from("education").select("*").eq("user_id", userData.id);
         const { data: expData } = await supabase.from("experiences").select("*").eq("user_id", userData.id).order("end_date", { ascending: false });
         const { data: skillsData } = await supabase.from("user_skills").select("proficiency_level, skills(name)").eq("user_id", userData.id);
@@ -98,7 +131,6 @@ export function Profile() {
 
   useEffect(() => { fetchProfile(); }, []);
 
-  // Fetch this user's posts for the Activity section
   const { data: userPosts = [] } = useQuery({
     queryKey: ['userPosts', profile?.id],
     queryFn: async () => {
@@ -125,72 +157,73 @@ export function Profile() {
     }
   });
 
-  // Image Upload Logic
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
+  // 1. Direct Upload for the Banner
+  const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !profile?.id) return;
-
     try {
       const fileExt = file.name.split('.').pop();
-      const filePath = `${profile.id}/${type}_${Math.random()}.${fileExt}`;
-
+      const filePath = `${profile.id}/banner_${Math.random()}.${fileExt}`;
       await supabase.storage.from('profile_images').upload(filePath, file);
       const { data } = supabase.storage.from('profile_images').getPublicUrl(filePath);
-
-      const updateData = type === 'avatar'
-        ? { profile_photo_url: data.publicUrl }
-        : { banner_url: data.publicUrl };
-
-      await supabase.from('users').update(updateData).eq('id', profile.id);
-      fetchProfile(); // Refresh screen
-    } catch (error) {
-      console.error("Upload failed", error);
-    }
+      await supabase.from('users').update({ banner_url: data.publicUrl }).eq('id', profile.id);
+      fetchProfile();
+    } catch (error) { console.error("Banner upload failed", error); }
   };
 
-  // NEW: Mutation to save final image data after positioning
-  const saveImagePositionMutation = useMutation({
-    mutationFn: async (imageDataUrl: string) => {
+  // 2. Load Avatar into Cropper
+  const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImage(reader.result as string);
+      setZoom(1);
+      setCrop({ x: 0, y: 0 });
+      setIsPositionImageOpen(true);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 3. Save Cropped Avatar to Database
+  const saveCroppedImageMutation = useMutation({
+    mutationFn: async (croppedImageBlob: Blob) => {
       if (!profile?.id) throw new Error("No profile ID found");
       
-      // We will create a fresh blob and upload it, overwriting the old one.
-      const blob = await (await fetch(imageDataUrl)).blob();
+      const fileExt = 'jpg';
+      const fileName = `avatar_${Math.random()}.${fileExt}`;
+      const filePath = `${profile.id}/${fileName}`;
       
-      // Determine existing path from current URL.
-      if (!profile.profile_photo_url) return;
+      const { error: uploadError } = await supabase.storage
+        .from('profile_images')
+        .upload(filePath, croppedImageBlob, { upsert: true });
+        
+      if (uploadError) throw uploadError;
       
-      const pathMatches = profile.profile_photo_url.match(/profile_images\/(.+)$/);
-      if (pathMatches && pathMatches[1]) {
-        const filePath = pathMatches[1];
-        
-        // Use 'upsert' to overwrite existing file
-        await supabase.storage
-          .from('profile_images')
-          .upload(filePath, blob, { upsert: true });
-        
-        // Re-get public URL to ensure it is fresh (though path is the same)
-        const { data } = supabase.storage
-          .from('profile_images')
-          .getPublicUrl(filePath);
-          
-        // Update user record (though the URL doesn't change, this confirms save)
-        await supabase.from('users').update({ profile_photo_url: data.publicUrl }).eq('id', profile.id);
-      }
+      const { data } = supabase.storage.from('profile_images').getPublicUrl(filePath);
+      await supabase.from('users').update({ profile_photo_url: data.publicUrl }).eq('id', profile.id);
     },
     onSuccess: () => {
       setIsPositionImageOpen(false);
-      fetchProfile(); // Refresh screen
-    },
-    onError: (error) => {
-        console.error("Failed to save image position:", error);
-        alert("Failed to save image position. See console for details.");
+      setCropImage(null);
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      fetchProfile();
     }
   });
 
-  const deleteImage = async (type: 'avatar' | 'banner') => {
+  const deleteImageMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id) return;
+      await supabase.from('users').update({ profile_photo_url: null }).eq('id', profile.id);
+    },
+    onSuccess: () => fetchProfile()
+  });
+
+  const deleteBanner = async () => {
     if (!profile?.id) return;
-    const updateData = type === 'avatar' ? { profile_photo_url: null } : { banner_url: null };
-    await supabase.from('users').update(updateData).eq('id', profile.id);
+    await supabase.from('users').update({ banner_url: null }).eq('id', profile.id);
     fetchProfile();
   };
 
@@ -212,69 +245,51 @@ export function Profile() {
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
 
-      {/* SINGLE COLUMN LAYOUT (Max width 4xl for LinkedIn style) */}
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
-
         {/* 1. HEADER CARD */}
         <Card className="overflow-hidden shadow-sm border-0">
+          
           {/* Cover Image */}
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-            <input type="file" hidden ref={bannerInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="icon" className="absolute top-4 right-4 rounded-full shadow-md z-10">
-                  <Camera className="h-4 w-4" />
+            
+            <div className="absolute top-4 right-4 flex gap-2 z-10">
+              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
+                <Camera className="h-4 w-4" />
+                <input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} />
+              </label>
+              
+              {profile.banner_url && (
+                <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={deleteBanner}>
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onSelect={(e) => { e.preventDefault(); bannerInputRef.current?.click(); }}
-                  className="cursor-pointer"
-                >
-                  <Camera className="mr-2 h-4 w-4" /> Change Cover
-                </DropdownMenuItem>
-                {profile.banner_url && (
-                  <DropdownMenuItem onClick={() => deleteImage('banner')} className="cursor-pointer text-destructive focus:text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" /> Remove Cover
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+            </div>
           </div>
 
           <CardContent className="relative pt-0 pb-6 bg-card">
             {/* Avatar & Action Buttons */}
             <div className="flex justify-between items-start">
-              <div className="-mt-20 relative z-10 w-fit"> {/* I have used the exact paste provided and used relative w-fit to perfectly overlay on the avatar edge */}
+              
+              <div className="-mt-20 relative z-10 w-fit">
                 <Avatar className="h-40 w-40 border-4 border-card shadow-xl bg-muted">
                   <AvatarImage src={profile.profile_photo_url} className="object-cover" />
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
                 
-                {/* NEW: RELOCATE TRASH ICON AND ADD ADJUST ICON to top-right area */}
-                {profile.profile_photo_url && (
-                  <div className="absolute -top-2 -right-8 flex gap-2 z-10">
-                    <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('avatar')}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                    </Button>
-                    <Button variant="secondary" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => setIsPositionImageOpen(true)}>
-                        <TrendingUp className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                <input type="file" className="hidden" ref={avatarInputRef} accept="image/*" onChange={handleAvatarSelect} />
 
-                {/* Kept Camera Icon group in bottom-right area, exactly as per the last working state shown in image_7 and image_8 */}
-                <div className="absolute bottom-2 -right-8 z-10">
-                  <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
-                    <Camera className="h-4 w-4" />
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
-                  </label>
-                </div>
+                {/* Dynamic Camera / Pencil Icon */}
+                <Button 
+                    size="icon" 
+                    variant="secondary" 
+                    className="absolute -top-2 -right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80" 
+                    onClick={() => avatarInputRef.current?.click()}
+                >
+                    {profile.profile_photo_url ? <Pencil className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+                </Button>
               </div>
 
-              {/* Action buttons (Connect, Edit Profile) go in the second part of the flex div */}
               <div className="pt-4 flex gap-2">
                 <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
                 <Button variant="secondary" className="gap-2 rounded-full" onClick={openEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
@@ -298,7 +313,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 2. ABOUT & SKILLS CARD (Full Width) */}
+        {/* 2. ABOUT & SKILLS CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader><CardTitle className="text-xl">About</CardTitle></CardHeader>
           <CardContent>
@@ -323,7 +338,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 3. ACTIVITY (Recent Posts) */}
+        {/* 3. ACTIVITY */}
         <Card className="shadow-sm border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -422,40 +437,39 @@ export function Profile() {
         </DialogContent>
       </Dialog>
 
-      {/* NEW: POSITION IMAGE MODAL (Under Construction / Placeholder) */}
+      {/* POSITION IMAGE MODAL (Maia Style with React-Easy-Crop) */}
       <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[550px] flex flex-col p-6 rounded-2xl"> {/* Maia-style Generous spacing, full rounding */}
+        <DialogContent className="sm:max-w-[700px] h-[750px] flex flex-col p-10 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Adjust Image Position & Zoom</DialogTitle>
           </DialogHeader>
           
           <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <p className="text-center text-muted-foreground leading-relaxed">
-              This feature is currently under construction. For now, you can manually zoom the image. Later, we'll add a proper editor.
+            <p className="text-center text-muted-foreground leading-relaxed mb-8">
+              Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.
             </p>
             
-            <Separator className="my-6" />
+            <Separator className="mb-8" />
             
-            <div className="w-[300px] h-[300px] overflow-hidden rounded-full border-4 border-card shadow-xl flex items-center justify-center bg-muted">
-                {profile.profile_photo_url ? (
-                    <img 
-                        src={profile.profile_photo_url} 
-                        className="object-cover max-w-full max-h-full" 
-                        style={{
-                            transform: `scale(${imageTransform.zoom}) translate(${imageTransform.pan.x}px, ${imageTransform.pan.y}px)`,
-                            transition: 'transform 0.1s ease-out'
-                        }}
+            <div className="w-[450px] h-[450px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-8">
+                {cropImage && (
+                    <Cropper
+                        image={cropImage}
+                        crop={crop}
+                        zoom={zoom}
+                        aspect={1 / 1}
+                        cropShape="round"
+                        showGrid={false}
+                        onCropChange={setCrop}
+                        onZoomChange={setZoom}
+                        onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)}
                     />
-                ) : (
-                    <Avatar className="h-full w-full bg-muted">
-                        <AvatarFallback className="text-7xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
-                    </Avatar>
                 )}
             </div>
 
-            <Separator className="my-6" />
+            <Separator className="mb-8" />
 
-            <div className="w-full max-w-sm space-y-3">
+            <div className="w-full max-w-sm space-y-3 mt-auto">
               <Label className="font-semibold text-lg flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-primary" />
                 Zoom
@@ -465,34 +479,46 @@ export function Profile() {
                 max={3} 
                 min={1} 
                 step={0.1} 
-                value={[imageTransform.zoom]} 
-                onValueChange={(val) => setImageTransform({...imageTransform, zoom: val[0]})} 
+                value={[zoom]} 
+                onValueChange={(val) => setZoom(val[0])} 
                 className="w-full mt-3" 
               />
             </div>
           </div>
           
-          <DialogFooter className="flex gap-3 justify-end mt-auto p-2">
-            <Button variant="outline" className="px-6 rounded-full font-semibold" onClick={() => setIsPositionImageOpen(false)}>Cancel</Button>
-            <Button 
-              className="px-6 rounded-full font-semibold" 
-              onClick={() => {
-                // CONCEPTUAL CODE for library use:
-                // if (imageEditorRef.current) {
-                //   // Use library method to get transformed image data as a base64 string
-                //   const imageDataUrl = imageEditorRef.current.getImageScaledToCanvas().toDataUrl();
-                //   saveImagePositionMutation.mutate(imageDataUrl);
-                // }
-                
-                // For now, to confirm logic, we pass current URL. It runs mutation, refreshes, confirms logic.
-                if (profile.profile_photo_url) {
-                    saveImagePositionMutation.mutate(profile.profile_photo_url); // This mutation will run, confirm logic.
-                }
-              }} 
-              disabled={saveImagePositionMutation.isPending}
-            >
-              {saveImagePositionMutation.isPending ? "Saving..." : "Save Image Position"}
+          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2">
+            <Button variant="outline" className="px-6 rounded-full font-semibold justify-start" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
+              Cancel
             </Button>
+            
+            <div className="flex gap-3 justify-end">
+                {profile.profile_photo_url && (
+                    <Button 
+                      variant="destructive" 
+                      className="px-6 rounded-full font-semibold gap-2" 
+                      onClick={() => {
+                        deleteImageMutation.mutate();
+                        setIsPositionImageOpen(false);
+                      }} 
+                      disabled={deleteImageMutation.isPending}
+                    >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {deleteImageMutation.isPending ? "Deleting..." : "Delete Image"}
+                    </Button>
+                )}
+                <Button 
+                    className="px-6 rounded-full font-semibold" 
+                    onClick={async () => {
+                        if (cropImage && croppedAreaPixels) {
+                            const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
+                            saveCroppedImageMutation.mutate(croppedImageBlob);
+                        }
+                    }} 
+                    disabled={saveCroppedImageMutation.isPending}
+                >
+                  {saveCroppedImageMutation.isPending ? "Saving..." : "Save Image"}
+                </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
