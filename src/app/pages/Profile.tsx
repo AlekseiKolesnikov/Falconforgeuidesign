@@ -13,9 +13,15 @@ import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+import {
   MapPin, Mail, Briefcase, GraduationCap,
   TrendingUp, Users, Edit, Camera, Trash2, ThumbsUp, MessageCircle, Pencil,
-  X, Image as ImageIcon
+  X, Image as ImageIcon, MoreHorizontal
 } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
@@ -108,6 +114,11 @@ export function Profile() {
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostImage, setNewPostImage] = useState<File | null>(null);
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
+
+  // Edit Post State
+  const [isEditPostOpen, setIsEditPostOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<any>(null);
+  const [editPostContent, setEditPostContent] = useState("");
 
   // --- QUERIES ---
   const fetchProfile = async () => {
@@ -292,6 +303,30 @@ export function Profile() {
     }
   });
 
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: number) => {
+      const { error } = await supabase.from('posts').delete().eq('id', postId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
+  });
+
+  const editPostMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingPost?.id || !editPostContent.trim()) return;
+      const { error } = await supabase.from('posts').update({ content: editPostContent }).eq('id', editingPost.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setIsEditPostOpen(false);
+      setEditingPost(null);
+      setEditPostContent("");
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
+  });
+
   // === EARLY RETURNS (MUST BE AFTER ALL HOOKS) ===
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
@@ -417,9 +452,38 @@ export function Profile() {
             ) : (
               <div className="grid md:grid-cols-2 gap-4">
                 {userPosts.map((post: any) => (
-                  <Card key={post.id} className="border border-border shadow-none overflow-hidden flex flex-col">
-                    <CardHeader className="p-4 pb-2">
-                      <p className="text-sm text-foreground line-clamp-2">{post.content}</p>
+                  <Card key={post.id} className="border border-border shadow-none overflow-hidden flex flex-col relative group">
+                    <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
+                      <p className="text-sm text-foreground line-clamp-2 pr-4">{post.content}</p>
+                      
+                      {/* Edit/Delete Dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 -mt-2 -mr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => {
+                            setEditingPost(post);
+                            setEditPostContent(post.content);
+                            setIsEditPostOpen(true);
+                          }}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit Post
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            onClick={() => {
+                              if (window.confirm("Are you sure you want to delete this post?")) {
+                                deletePostMutation.mutate(post.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Post
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
                     </CardHeader>
                     {post.image_url && (
                       <div className="w-full h-48 bg-muted mt-2">
@@ -610,7 +674,7 @@ export function Profile() {
 
           <Textarea
             placeholder="What do you want to talk about?"
-            className="min-h-[120px] resize-none text-lg border-0 focus-visible:ring-0 p-0 shadow-none mb-4"
+            className="min-h-[120px] resize-none text-lg border border-border rounded-xl focus-visible:ring-1 p-4 shadow-none mb-4"
             value={newPostContent}
             onChange={(e) => setNewPostContent(e.target.value)}
           />
@@ -645,6 +709,33 @@ export function Profile() {
               onClick={() => createPostMutation.mutate()}
             >
               {createPostMutation.isPending ? "Posting..." : "Post"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: EDIT POST */}
+      <Dialog open={isEditPostOpen} onOpenChange={setIsEditPostOpen}>
+        <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl">Edit Post</DialogTitle>
+          </DialogHeader>
+
+          <Textarea
+            placeholder="What do you want to talk about?"
+            className="min-h-[120px] resize-none text-lg border border-border rounded-xl focus-visible:ring-1 p-4 shadow-none mb-4"
+            value={editPostContent}
+            onChange={(e) => setEditPostContent(e.target.value)}
+          />
+
+          <DialogFooter className="flex justify-end items-center border-t pt-4 mt-auto">
+            <Button variant="outline" className="rounded-full mr-2" onClick={() => setIsEditPostOpen(false)}>Cancel</Button>
+            <Button
+              className="rounded-full font-semibold px-6"
+              disabled={!editPostContent.trim() || editPostMutation.isPending || editPostContent === editingPost?.content}
+              onClick={() => editPostMutation.mutate()}
+            >
+              {editPostMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
