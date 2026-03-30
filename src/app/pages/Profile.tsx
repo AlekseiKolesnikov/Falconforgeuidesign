@@ -280,6 +280,7 @@ export function Profile() {
   const createPostMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id || !newPostContent.trim()) return;
+
       let imageUrl = null;
       if (newPostImage) {
         const filePath = `${profile.id}/post_${Math.random()}.${newPostImage.name.split('.').pop()}`;
@@ -288,18 +289,55 @@ export function Profile() {
         const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
         imageUrl = data.publicUrl;
       }
-      const { error } = await supabase.from('posts').insert({
+
+      // Extract tags
+      const rawTags = newPostContent.match(/#[a-zA-Z0-9_]+/g) || [];
+      const extractedTags = rawTags.map(tag => tag.toLowerCase());
+
+      // Insert Post WITH hashtags
+      const { data: newPost, error } = await supabase.from('posts').insert({
         user_id: profile.id,
         content: newPostContent.trim(),
         image_url: imageUrl,
-      });
+        hashtags: extractedTags // Saves tags to DB
+      }).select().single();
+
       if (error) throw error;
+
+      // Insert Tags into linking tables (Matches Feed.tsx exactly)
+      if (extractedTags.length > 0 && newPost) {
+        for (const tagName of extractedTags) {
+          const { data: tagData } = await supabase.from('tags').upsert({ name: tagName }, { onConflict: 'name' }).select().single();
+          if (tagData) {
+            await supabase.from('post_tags').insert({ post_id: newPost.id, tag_id: tagData.id });
+          }
+        }
+      }
     },
     onSuccess: () => {
       setIsCreatePostOpen(false);
       setNewPostContent("");
       setNewPostImage(null);
       setNewPostImagePreview(null);
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
+  });
+
+  const updatePostMutation = useMutation({
+    mutationFn: async ({ postId, content }: { postId: number, content: string }) => {
+      // Extract tags for edits too!
+      const rawTags = content.match(/#[a-zA-Z0-9_]+/g) || [];
+      const extractedTags = rawTags.map(tag => tag.toLowerCase());
+
+      const { error } = await supabase.from('posts').update({
+        content: content.trim(),
+        hashtags: extractedTags
+      }).eq('id', postId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditingPostId(null);
       queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
     }
   });
@@ -311,17 +349,6 @@ export function Profile() {
     },
     onSuccess: () => {
       setPostToDelete(null);
-      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
-    }
-  });
-
-  const updatePostMutation = useMutation({
-    mutationFn: async ({ postId, content }: { postId: number, content: string }) => {
-      const { error } = await supabase.from('posts').update({ content: content.trim() }).eq('id', postId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setEditingPostId(null);
       queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
     }
   });
@@ -475,8 +502,21 @@ export function Profile() {
                       ) : (
                         /* VIEW MODE */
                         <>
-                          <p className="text-sm text-foreground line-clamp-2 pr-8">{post.content}</p>
-                          
+                          <div className="w-full pr-8">
+                            <p className="text-sm text-foreground line-clamp-2">{post.content}</p>
+
+                            {/* NEW: Render Hashtag Badges */}
+                            {post.hashtags?.length > 0 && (
+                              <div className="flex gap-2 mt-2 flex-wrap">
+                                {post.hashtags.map((tag: string) => (
+                                  <Badge key={tag} variant="secondary" className="text-xs font-normal text-blue-600 bg-blue-50 border-0 hover:bg-blue-100">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
                           {/* EXACT MATCH OF FEED.TSX DROPDOWN */}
                           <DropdownMenu>
                             <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -739,13 +779,13 @@ export function Profile() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90" 
-              onClick={() => { 
-                if (postToDelete) { 
-                  deletePostMutation.mutate(postToDelete.id); 
-                  setPostToDelete(null); 
-                } 
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (postToDelete) {
+                  deletePostMutation.mutate(postToDelete.id);
+                  setPostToDelete(null);
+                }
               }}
             >
               Delete
