@@ -458,7 +458,7 @@ export function Profile() {
             </div>
 
             {/* Slider shifted higher by removing top separator and adding margin-bottom */}
-            <div className="w-full max-w-sm mb-8">
+            <div className="w-full max-w-sm mb-12">
               <Slider
                 defaultValue={[1]}
                 max={3}
@@ -471,7 +471,7 @@ export function Profile() {
             </div>
           </div>
 
-          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2 pt-4 border-t">
+          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2 pt-4">
             {/* Left Button - Fixed Width */}
             <Button variant="outline" className="w-[140px] rounded-full font-semibold" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
