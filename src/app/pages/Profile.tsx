@@ -155,13 +155,18 @@ export function Profile() {
     }
   };
 
-useEffect(() => { fetchProfile(); }, []);
+  useEffect(() => { fetchProfile(); }, []);
 
   const { data: userPosts = [] } = useQuery({
     queryKey: ['userPosts', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return [];
-      const { data } = await supabase.from('posts').select(`*, post_likes(user_id), post_comments(id)`).eq('user_id', profile.id).order('created_at', { ascending: false }).limit(4);
+      const { data } = await supabase
+        .from('posts')
+        .select(`*, post_likes(user_id), post_comments(id)`)
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(4);
       return data || [];
     },
     enabled: !!profile?.id,
@@ -278,25 +283,47 @@ useEffect(() => { fetchProfile(); }, []);
       let imageUrl = null;
       if (newPostImage) {
         const filePath = `${profile.id}/post_${Math.random()}.${newPostImage.name.split('.').pop()}`;
-        await supabase.storage.from('post_images').upload(filePath, newPostImage);
+        const { error: uploadError } = await supabase.storage.from('post_images').upload(filePath, newPostImage);
+        if (uploadError) throw uploadError;
         const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
         imageUrl = data.publicUrl;
       }
-      await supabase.from('posts').insert({ user_id: profile.id, content: newPostContent.trim(), image_url: imageUrl });
+      const { error } = await supabase.from('posts').insert({
+        user_id: profile.id,
+        content: newPostContent.trim(),
+        image_url: imageUrl,
+      });
+      if (error) throw error;
     },
-    onSuccess: () => { setIsCreatePostOpen(false); setNewPostContent(""); setNewPostImage(null); setNewPostImagePreview(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
+    onSuccess: () => {
+      setIsCreatePostOpen(false);
+      setNewPostContent("");
+      setNewPostImage(null);
+      setNewPostImagePreview(null);
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
   });
 
   const deletePostMutation = useMutation({
-    mutationFn: async (postId: number) => { await supabase.from('posts').delete().eq('id', postId); },
-    onSuccess: () => { setPostToDelete(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
+    mutationFn: async (postId: number) => {
+      const { error } = await supabase.from('posts').delete().eq('id', postId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setPostToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
   });
 
   const updatePostMutation = useMutation({
     mutationFn: async ({ postId, content }: { postId: number, content: string }) => {
-      await supabase.from('posts').update({ content: content.trim() }).eq('id', postId);
+      const { error } = await supabase.from('posts').update({ content: content.trim() }).eq('id', postId);
+      if (error) throw error;
     },
-    onSuccess: () => { setEditingPostId(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
+    onSuccess: () => {
+      setEditingPostId(null);
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
   });
 
   // Early returns must stay AFTER the hooks above
@@ -306,43 +333,6 @@ useEffect(() => { fetchProfile(); }, []);
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
-
-      {/* MODAL: DELETE CONFIRMATION (Using Dialog instead of AlertDialog) */}
-      <Dialog open={postToDelete !== null} onOpenChange={(open) => !open && setPostToDelete(null)}>
-        <DialogContent className="sm:max-w-[400px] p-6 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-destructive">Delete Post?</DialogTitle>
-          </DialogHeader>
-
-          <div className="py-4">
-            <p className="text-muted-foreground">
-              Are you sure you want to delete this post? This action cannot be undone.
-            </p>
-          </div>
-
-          <DialogFooter className="flex gap-3 sm:justify-end">
-            <Button
-              variant="outline"
-              className="rounded-full px-6"
-              onClick={() => setPostToDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-full px-6"
-              disabled={deletePostMutation.isPending}
-              onClick={() => {
-                if (postToDelete?.id) {
-                  deletePostMutation.mutate(postToDelete.id);
-                }
-              }}
-            >
-              {deletePostMutation.isPending ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* 1. HEADER CARD */}
@@ -446,7 +436,7 @@ useEffect(() => { fetchProfile(); }, []);
           </CardContent>
         </Card>
 
-        {/* ACTIVITY CARD */}
+        {/* 3. ACTIVITY CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -461,27 +451,58 @@ useEffect(() => { fetchProfile(); }, []);
                 <Card key={post.id} className="border border-border shadow-none overflow-hidden flex flex-col relative group">
                   <CardHeader className="p-4 pb-2">
                     <div className="flex items-start justify-between">
+
                       {editingPostId === post.id ? (
+                        /* INLINE EDIT MODE */
                         <div className="w-full space-y-3 mt-2">
-                          <Textarea value={editPostContent} onChange={(e) => setEditPostContent(e.target.value)} className="min-h-[100px] p-4 border border-border rounded-xl focus-visible:ring-1 bg-background" />
+                          <Textarea
+                            value={editPostContent}
+                            onChange={(e) => setEditPostContent(e.target.value)}
+                            className="min-h-[100px] p-4 border border-border rounded-xl focus-visible:ring-1 bg-background"
+                          />
                           <div className="flex justify-end gap-2">
                             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditingPostId(null)}>Cancel</Button>
-                            <Button size="sm" className="rounded-full" onClick={() => updatePostMutation.mutate({ postId: post.id, content: editPostContent })}>Save</Button>
+                            <Button
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() => updatePostMutation.mutate({ postId: post.id, content: editPostContent })}
+                              disabled={updatePostMutation.isPending || !editPostContent.trim()}
+                            >
+                              {updatePostMutation.isPending ? 'Saving...' : 'Save'}
+                            </Button>
                           </div>
                         </div>
                       ) : (
+                        /* VIEW MODE */
                         <>
                           <p className="text-sm text-foreground line-clamp-2 pr-8">{post.content}</p>
+                          
+                          {/* EXACT MATCH OF FEED.TSX DROPDOWN */}
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2"><MoreHorizontal className="h-4 w-4" /></Button>
+                            <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-5 w-5" />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingPostId(post.id); setEditPostContent(post.content); }}>
-                                <Pencil className="mr-2 h-4 w-4" /> Edit
+                            <DropdownMenuContent align="end" className="w-40 z-50 bg-popover text-popover-foreground border shadow-md">
+                              <DropdownMenuItem
+                                className="cursor-pointer flex items-center p-2 outline-none"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingPostId(post.id);
+                                  setEditPostContent(post.content || '');
+                                }}
+                              >
+                                <Pencil className="mr-2 h-4 w-4" />
+                                <span>Edit Post</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); setPostToDelete(post); }}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              <DropdownMenuItem
+                                className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPostToDelete(post);
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                <span>Delete Post</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -709,7 +730,7 @@ useEffect(() => { fetchProfile(); }, []);
         </DialogContent>
       </Dialog>
 
-      {/* WORKING ALERT DIALOG (Same as Feed.tsx) */}
+      {/* EXACT MATCH OF FEED.TSX ALERT DIALOG */}
       <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -718,7 +739,17 @@ useEffect(() => { fetchProfile(); }, []);
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (postToDelete) { deletePostMutation.mutate(postToDelete.id); } }}>Delete</AlertDialogAction>
+            <AlertDialogAction 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90" 
+              onClick={() => { 
+                if (postToDelete) { 
+                  deletePostMutation.mutate(postToDelete.id); 
+                  setPostToDelete(null); 
+                } 
+              }}
+            >
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
