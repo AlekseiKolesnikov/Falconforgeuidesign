@@ -547,7 +547,7 @@ export function Profile() {
 
             <Separator className="mb-8" />
 
-            <div className="w-full max-w-sm mb-12">
+            <div className="w-full max-w-sm mt-auto">
               <Slider
                 defaultValue={[1]}
                 max={3}
