@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "../compone
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Separator } from "../components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
@@ -14,8 +13,9 @@ import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
 import {
-  MapPin, Mail, Calendar, Briefcase, GraduationCap,
-  TrendingUp, Users, Share2, Edit, Camera, Trash2, ThumbsUp, MessageCircle, Pencil
+  MapPin, Mail, Briefcase, GraduationCap,
+  TrendingUp, Users, Edit, Camera, Trash2, ThumbsUp, MessageCircle, Pencil,
+  X, Image as ImageIcon
 } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
@@ -245,6 +245,60 @@ export function Profile() {
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
 
+  // 4. Create Post State & Mutation
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
+  const [newPostContent, setNewPostContent] = useState("");
+  const [newPostImage, setNewPostImage] = useState<File | null>(null);
+  const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
+
+  const handlePostImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setNewPostImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setNewPostImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const createPostMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id || !newPostContent.trim()) return;
+
+      let imageUrl = null;
+      if (newPostImage) {
+        const fileExt = newPostImage.name.split('.').pop();
+        const filePath = `${profile.id}/post_${Math.random()}.${fileExt}`;
+
+        // Assumes you have a 'post_images' bucket set up in Supabase
+        const { error: uploadError } = await supabase.storage
+          .from('post_images')
+          .upload(filePath, newPostImage);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
+        imageUrl = data.publicUrl;
+      }
+
+      const { error } = await supabase.from('posts').insert({
+        user_id: profile.id,
+        content: newPostContent,
+        image_url: imageUrl,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setIsCreatePostOpen(false);
+      setNewPostContent("");
+      setNewPostImage(null);
+      setNewPostImagePreview(null);
+      // This instantly refreshes the activity feed on the profile!
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
+    }
+  });
+
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
@@ -361,7 +415,7 @@ export function Profile() {
               <CardTitle className="text-xl">Activity</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">{userPosts.length} posts</p>
             </div>
-            <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5">Create a post</Button>
+            <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={() => setIsCreatePostOpen(true)}>Create a post</Button>
           </CardHeader>
           <CardContent>
             {userPosts.length === 0 ? (
@@ -542,6 +596,65 @@ export function Profile() {
                 {saveCroppedImageMutation.isPending ? "Saving..." : "Save"}
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3. CREATE POST MODAL */}
+      <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+        <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl">Create a post</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex gap-4 mb-4">
+            <Avatar className="h-12 w-12 border border-border">
+              <AvatarImage src={profile.profile_photo_url} className="object-cover" />
+              <AvatarFallback>{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col justify-center">
+              <span className="font-semibold text-foreground">{profile.first_name} {profile.last_name}</span>
+            </div>
+          </div>
+
+          <Textarea
+            placeholder="What do you want to talk about?"
+            className="min-h-[120px] resize-none text-lg border-0 focus-visible:ring-0 p-0 shadow-none mb-4"
+            value={newPostContent}
+            onChange={(e) => setNewPostContent(e.target.value)}
+          />
+
+          {newPostImagePreview && (
+            <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden mb-4 border">
+              <img src={newPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
+              <Button
+                variant="destructive"
+                size="icon"
+                className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md"
+                onClick={() => {
+                  setNewPostImage(null);
+                  setNewPostImagePreview(null);
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
+          <DialogFooter className="flex justify-between items-center sm:justify-between border-t pt-4 mt-auto">
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors p-2.5 rounded-full">
+                <ImageIcon className="h-5 w-5" />
+                <input type="file" className="hidden" accept="image/*" onChange={handlePostImageSelect} />
+              </label>
+            </div>
+            <Button
+              className="rounded-full font-semibold px-6"
+              disabled={!newPostContent.trim() || createPostMutation.isPending}
+              onClick={() => createPostMutation.mutate()}
+            >
+              {createPostMutation.isPending ? "Posting..." : "Post"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
