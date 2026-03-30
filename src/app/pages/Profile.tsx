@@ -83,6 +83,7 @@ export function Profile() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  // --- STATE ---
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [education, setEducation] = useState<any[]>([]);
   const [experiences, setExperiences] = useState<any[]>([]);
@@ -101,6 +102,12 @@ export function Profile() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
+  // Create Post State
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
+  const [newPostContent, setNewPostContent] = useState("");
+  const [newPostImage, setNewPostImage] = useState<File | null>(null);
+  const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
 
   // --- QUERIES ---
   const fetchProfile = async () => {
@@ -147,7 +154,7 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
-  // --- MUTATIONS ---
+  // --- MUTATIONS & HANDLERS ---
   const updateProfileMutation = useMutation({
     mutationFn: async (formData: typeof editForm) => {
       await supabase.from('users').update(formData).eq('id', profile?.id);
@@ -158,7 +165,6 @@ export function Profile() {
     }
   });
 
-  // 1. Direct Upload for the Banner
   const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !profile?.id) return;
@@ -172,7 +178,6 @@ export function Profile() {
     } catch (error) { console.error("Banner upload failed", error); }
   };
 
-  // 2. Load Avatar into Cropper
   const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -188,7 +193,6 @@ export function Profile() {
     reader.readAsDataURL(file);
   };
 
-  // 3. Save Cropped Avatar to Database
   const saveCroppedImageMutation = useMutation({
     mutationFn: async (croppedImageBlob: Blob) => {
       if (!profile?.id) throw new Error("No profile ID found");
@@ -242,15 +246,6 @@ export function Profile() {
     }
   };
 
-  if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
-  if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
-
-  // 4. Create Post State & Mutation
-  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [newPostContent, setNewPostContent] = useState("");
-  const [newPostImage, setNewPostImage] = useState<File | null>(null);
-  const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
-
   const handlePostImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -270,7 +265,6 @@ export function Profile() {
         const fileExt = newPostImage.name.split('.').pop();
         const filePath = `${profile.id}/post_${Math.random()}.${fileExt}`;
 
-        // Assumes you have a 'post_images' bucket set up in Supabase
         const { error: uploadError } = await supabase.storage
           .from('post_images')
           .upload(filePath, newPostImage);
@@ -294,10 +288,13 @@ export function Profile() {
       setNewPostContent("");
       setNewPostImage(null);
       setNewPostImagePreview(null);
-      // This instantly refreshes the activity feed on the profile!
       queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
     }
   });
+
+  // === EARLY RETURNS (MUST BE AFTER ALL HOOKS) ===
+  if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
+  if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
 
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
@@ -326,24 +323,22 @@ export function Profile() {
           </div>
 
           <CardContent className="relative pt-0 pb-6 bg-card">
-            {/* Avatar & Action Buttons */}
             <div className="flex justify-between items-start">
 
+              {/* Avatar & Action Buttons */}
               <div className="-mt-20 relative z-10 w-fit">
                 <Avatar className="h-40 w-40 border-4 border-card shadow-xl bg-muted">
                   <AvatarImage src={profile.profile_photo_url} className="object-cover" />
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
 
-                {/* BULLETPROOF DIRECT BUTTONS (No Dropdown) */}
                 {profile.profile_photo_url ? (
-                  // IF IMAGE EXISTS: Show Pencil to open the Adjust Modal directly
                   <Button
                     size="icon"
                     variant="secondary"
-                    className="absolute -bottom-0 -right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80"
+                    className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80"
                     onClick={() => {
-                      setCropImage(profile.profile_photo_url || null); // Load current image
+                      setCropImage(profile.profile_photo_url || null);
                       setZoom(1);
                       setCrop({ x: 0, y: 0 });
                       setIsPositionImageOpen(true);
@@ -352,8 +347,7 @@ export function Profile() {
                     <Pencil className="h-4 w-4" />
                   </Button>
                 ) : (
-                  // IF NO IMAGE: Show native Camera label to upload directly
-                  <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground absolute -top-2 -right-1 h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors z-10">
+                  <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground absolute bottom-1 right-1 h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors z-10">
                     <Camera className="h-4 w-4" />
                     <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
                   </label>
@@ -383,7 +377,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 2. ABOUT & SKILLS CARD */}
+        {/* 2. ABOUT CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader><CardTitle className="text-xl">About</CardTitle></CardHeader>
           <CardContent>
@@ -408,7 +402,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 3. ACTIVITY */}
+        {/* 3. ACTIVITY CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -443,7 +437,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 4. EXPERIENCE */}
+        {/* 4. EXPERIENCE CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader><CardTitle className="text-xl">Experience</CardTitle></CardHeader>
           <CardContent className="space-y-6">
@@ -465,7 +459,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 5. EDUCATION */}
+        {/* 5. EDUCATION CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader><CardTitle className="text-xl">Education</CardTitle></CardHeader>
           <CardContent className="space-y-6">
@@ -489,7 +483,7 @@ export function Profile() {
 
       {/* ----------------- MODALS ----------------- */}
 
-      {/* 1. TRUE EDIT PROFILE MODAL */}
+      {/* MODAL: EDIT PROFILE */}
       <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -513,9 +507,9 @@ export function Profile() {
         </DialogContent>
       </Dialog>
 
-      {/* 2. TRUE IMAGE POSITION MODAL */}
+      {/* MODAL: ADJUST IMAGE POSITION */}
       <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
-        <DialogContent className="sm:max-w-[700px] h-fit max-h-[95vh] flex flex-col p-10 pb-4 rounded-2xl">
+        <DialogContent className="sm:max-w-[700px] h-fit max-h-[95vh] flex flex-col pt-10 px-10 pb-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Adjust Image Position & Zoom</DialogTitle>
           </DialogHeader>
@@ -525,7 +519,7 @@ export function Profile() {
               Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.
             </p>
 
-            <div className="w-[450px] h-[450px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-8">
+            <div className="w-[400px] h-[400px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-6">
               {cropImage && (
                 <Cropper
                   image={cropImage}
@@ -541,8 +535,7 @@ export function Profile() {
               )}
             </div>
 
-            {/* Slider shifted higher */}
-            <div className="w-full max-w-sm mb-12">
+            <div className="w-full max-w-sm mb-4">
               <Slider
                 defaultValue={[1]}
                 max={3}
@@ -555,13 +548,11 @@ export function Profile() {
             </div>
           </div>
 
-          {/* Single clean footer, uniform buttons */}
-          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2 pb-4">
-
+          <DialogFooter className="flex gap-3 justify-between items-center mt-2 p-2">
             <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
             </Button>
-
+            
             <div className="flex gap-3 justify-end items-center">
               <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm whitespace-nowrap h-10 w-[140px] shrink-0 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
                 <Camera className="mr-2 h-4 w-4 shrink-0" /> Upload New
@@ -600,7 +591,7 @@ export function Profile() {
         </DialogContent>
       </Dialog>
 
-      {/* 3. CREATE POST MODAL */}
+      {/* MODAL: CREATE POST */}
       <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
         <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
           <DialogHeader className="mb-4">
@@ -609,11 +600,11 @@ export function Profile() {
 
           <div className="flex gap-4 mb-4">
             <Avatar className="h-12 w-12 border border-border">
-              <AvatarImage src={profile.profile_photo_url} className="object-cover" />
-              <AvatarFallback>{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
+              <AvatarImage src={profile?.profile_photo_url} className="object-cover" />
+              <AvatarFallback>{profile?.first_name?.[0]}{profile?.last_name?.[0]}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col justify-center">
-              <span className="font-semibold text-foreground">{profile.first_name} {profile.last_name}</span>
+              <span className="font-semibold text-foreground">{profile?.first_name} {profile?.last_name}</span>
             </div>
           </div>
 
