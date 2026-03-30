@@ -457,8 +457,8 @@ export function Profile() {
               )}
             </div>
 
-            {/* Slider shifted higher by removing top separator and adding margin-bottom */}
-            <div className="w-full max-w-sm mb-12">
+            {/* Slider shifted much higher with mb-20 */}
+            <div className="w-full max-w-sm mb-20">
               <Slider
                 defaultValue={[1]}
                 max={3}
@@ -471,45 +471,49 @@ export function Profile() {
             </div>
           </div>
 
-          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2 pt-4">
-            {/* Left Button - Fixed Width */}
-            <Button variant="outline" className="w-[140px] rounded-full font-semibold" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
+          {/* Removed "border-t" to kill the faint line, and tweaked padding */}
+          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-4 pb-6">
+            {/* Cancel Button - Fixed Height & Width */}
+            <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
             </Button>
+            
+            <div className="flex gap-3 justify-end items-center">
+                {/* 1. Upload New (Label) - Fixed Height & Width */}
+                <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 w-[140px] inline-flex items-center justify-center rounded-full font-semibold transition-colors">
+                    <Camera className="mr-2 h-4 w-4" /> Upload New
+                    <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
+                </label>
 
-            {/* Right Buttons - Fixed Widths */}
-            <div className="flex gap-3 justify-end">
-              <label className="w-[140px] cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
-                <Camera className="mr-2 h-4 w-4" /> Upload
-                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
-              </label>
-
-              {profile.profile_photo_url && (
-                <Button
-                  variant="destructive"
-                  className="w-[140px] rounded-full font-semibold"
-                  onClick={() => {
-                    deleteImageMutation.mutate();
-                    setIsPositionImageOpen(false);
-                  }}
-                  disabled={deleteImageMutation.isPending}
+                {/* 2. Delete Image (Button) - Fixed Height & Width */}
+                {profile.profile_photo_url && (
+                    <Button 
+                      variant="destructive" 
+                      className="h-10 w-[140px] rounded-full font-semibold gap-2" 
+                      onClick={() => {
+                        deleteImageMutation.mutate();
+                        setIsPositionImageOpen(false);
+                      }} 
+                      disabled={deleteImageMutation.isPending}
+                    >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {deleteImageMutation.isPending ? "..." : "Delete Image"}
+                    </Button>
+                )}
+                
+                {/* 3. Save Image (Button) - Fixed Height & Width */}
+                <Button 
+                    className="h-10 w-[140px] rounded-full font-semibold" 
+                    onClick={async () => {
+                        if (cropImage && croppedAreaPixels) {
+                            const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
+                            saveCroppedImageMutation.mutate(croppedImageBlob);
+                        }
+                    }} 
+                    disabled={saveCroppedImageMutation.isPending}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {deleteImageMutation.isPending ? "..." : "Delete"}
+                  {saveCroppedImageMutation.isPending ? "Saving..." : "Save Image"}
                 </Button>
-              )}
-              <Button
-                className="w-[140px] rounded-full font-semibold"
-                onClick={async () => {
-                  if (cropImage && croppedAreaPixels) {
-                    const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
-                    saveCroppedImageMutation.mutate(croppedImageBlob);
-                  }
-                }}
-                disabled={saveCroppedImageMutation.isPending}
-              >
-                {saveCroppedImageMutation.isPending ? "Saving..." : "Save"}
-              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
