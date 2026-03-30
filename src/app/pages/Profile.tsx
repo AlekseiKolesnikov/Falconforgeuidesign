@@ -171,34 +171,21 @@ export function Profile() {
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
             
-            {/* Hidden Input outside the dropdown */}
-            <input type="file" className="hidden" ref={bannerInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="icon" className="absolute top-4 right-4 rounded-full shadow-md z-10">
-                  <Camera className="h-4 w-4" />
+            {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
+            <div className="absolute top-4 right-4 flex gap-2 z-10">
+              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
+                <Camera className="h-4 w-4" />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
+              </label>
+              
+              {profile.banner_url && (
+                <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('banner')}>
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onSelect={(e) => { 
-                    e.preventDefault(); 
-                    setTimeout(() => bannerInputRef.current?.click(), 10); 
-                  }}
-                >
-                  <Camera className="mr-2 h-4 w-4" /> Change Cover
-                </DropdownMenuItem>
-                {profile.banner_url && (
-                  <DropdownMenuItem onClick={() => deleteImage('banner')} className="cursor-pointer text-destructive focus:text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" /> Remove Cover
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+            </div>
           </div>
-
+          
           <CardContent className="relative pt-0 pb-6 bg-card">
             {/* Avatar & Action Buttons */}
             <div className="flex justify-between items-start">
@@ -208,32 +195,19 @@ export function Profile() {
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
                 
-                {/* Hidden Input outside the dropdown */}
-                <input type="file" className="hidden" ref={avatarInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="secondary" className="absolute bottom-2 right-2 h-9 w-9 rounded-full shadow-md z-10">
-                      <Camera className="h-4 w-4" />
+                {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
+                <div className="absolute bottom-2 -right-8 flex gap-2 z-10">
+                  <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
+                    <Camera className="h-4 w-4" />
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
+                  </label>
+                  
+                  {profile.profile_photo_url && (
+                    <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('avatar')}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      onSelect={(e) => { 
-                        e.preventDefault(); 
-                        setTimeout(() => avatarInputRef.current?.click(), 10); 
-                      }}
-                    >
-                      <Camera className="mr-2 h-4 w-4" /> Upload Photo
-                    </DropdownMenuItem>
-                    {profile.profile_photo_url && (
-                      <DropdownMenuItem onSelect={() => deleteImage('avatar')} className="cursor-pointer text-destructive focus:text-destructive">
-                        <Trash2 className="mr-2 h-4 w-4" /> Remove Photo
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  )}
+                </div>
               </div>
 
               <div className="pt-4 flex gap-2">
