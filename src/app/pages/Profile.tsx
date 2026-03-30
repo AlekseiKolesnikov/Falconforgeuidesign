@@ -465,25 +465,27 @@ export function Profile() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
 
-                          {/* Changed onClick to onSelect! */}
                           <DropdownMenuItem
                             className="cursor-pointer"
                             onSelect={() => {
                               setEditingPost(post);
                               setEditPostContent(post.content);
-                              setIsEditPostOpen(true);
+                              // THE FIX: A tiny delay to let the dropdown close before opening the modal
+                              setTimeout(() => setIsEditPostOpen(true), 100);
                             }}
                           >
                             <Edit className="mr-2 h-4 w-4" /> Edit Post
                           </DropdownMenuItem>
 
-                          {/* Changed onClick to onSelect! */}
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                             onSelect={() => {
-                              if (window.confirm("Are you sure you want to delete this post?")) {
-                                deletePostMutation.mutate(post.id);
-                              }
+                              // THE FIX: A tiny delay here stops window.confirm from freezing the dropdown animation
+                              setTimeout(() => {
+                                if (window.confirm("Are you sure you want to delete this post?")) {
+                                  deletePostMutation.mutate(post.id);
+                                }
+                              }, 100);
                             }}
                           >
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Post
