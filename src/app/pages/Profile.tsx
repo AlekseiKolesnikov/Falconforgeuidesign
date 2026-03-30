@@ -547,7 +547,7 @@ export function Profile() {
 
             <Separator className="mb-8" />
 
-            <div className="w-full max-w-sm mt-auto">
+            <div className="w-full max-w-sm mb-12">
               <Slider
                 defaultValue={[1]}
                 max={3}
@@ -560,44 +560,48 @@ export function Profile() {
             </div>
           </div>
 
-          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2">
-            <Button variant="outline" className="px-6 rounded-full font-semibold justify-start" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
+          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2 pt-4 border-t">
+            {/* Cancel Button - Now Fixed Height & Width */}
+            <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
             </Button>
-
+            
             <div className="flex gap-3 justify-end items-center">
-              {/* BULLETPROOF UPLOAD NEW BUTTON */}
-              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 px-4 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
-                <Camera className="mr-2 h-4 w-4" /> Upload New
-                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
-              </label>
+                {/* 1. Upload New (Label) - Now Fixed Height & Width, padding reset */}
+                <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 w-[140px] inline-flex items-center justify-center rounded-full font-semibold transition-colors">
+                    <Camera className="mr-2 h-4 w-4" /> Upload New
+                    <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
+                </label>
 
-              {profile.profile_photo_url && (
-                <Button
-                  variant="destructive"
-                  className="px-6 rounded-full font-semibold gap-2"
-                  onClick={() => {
-                    deleteImageMutation.mutate();
-                    setIsPositionImageOpen(false);
-                  }}
-                  disabled={deleteImageMutation.isPending}
+                {/* 2. Delete Image (Button) - Fixed Height & Width */}
+                {profile.profile_photo_url && (
+                    <Button 
+                      variant="destructive" 
+                      className="h-10 w-[140px] rounded-full font-semibold gap-2" 
+                      onClick={() => {
+                        deleteImageMutation.mutate();
+                        setIsPositionImageOpen(false);
+                      }} 
+                      disabled={deleteImageMutation.isPending}
+                    >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {deleteImageMutation.isPending ? "..." : "Delete Image"}
+                    </Button>
+                )}
+                
+                {/* 3. Save Image (Button) - Fixed Height & Width */}
+                <Button 
+                    className="h-10 w-[140px] rounded-full font-semibold" 
+                    onClick={async () => {
+                        if (cropImage && croppedAreaPixels) {
+                            const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
+                            saveCroppedImageMutation.mutate(croppedImageBlob);
+                        }
+                    }} 
+                    disabled={saveCroppedImageMutation.isPending}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {deleteImageMutation.isPending ? "Deleting..." : "Delete Image"}
+                  {saveCroppedImageMutation.isPending ? "Saving..." : "Save Image"}
                 </Button>
-              )}
-              <Button
-                className="px-6 rounded-full font-semibold"
-                onClick={async () => {
-                  if (cropImage && croppedAreaPixels) {
-                    const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
-                    saveCroppedImageMutation.mutate(croppedImageBlob);
-                  }
-                }}
-                disabled={saveCroppedImageMutation.isPending}
-              >
-                {saveCroppedImageMutation.isPending ? "Saving..." : "Save Image"}
-              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
