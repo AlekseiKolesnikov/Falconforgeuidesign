@@ -10,11 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
+// NEW IMPORTS: useQuery for activity, and Slider + icons for Positioning modal
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { Slider } from "../components/ui/slider";
 import {
   MapPin, Mail, Calendar, Briefcase, GraduationCap,
   TrendingUp, Users, Share2, Edit, Camera, Trash2, ThumbsUp, MessageCircle
 } from "lucide-react";
+// NEW: Dropdown Menu is only for other options, not uploads now.
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 
 // --- INTERFACES ---
@@ -44,6 +47,8 @@ export function Profile() {
   const queryClient = useQueryClient();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  // NEW: Ref for canvas if using an image editor library
+  const imageEditorRef = useRef<any>(null);
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [education, setEducation] = useState<any[]>([]);
@@ -51,10 +56,16 @@ export function Profile() {
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Profile Edit Modal State
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     first_name: "", last_name: "", headline: "", bio: "", major: "", location: ""
   });
+
+  // NEW: Image Position Modal State
+  const [isPositionImageOpen, setIsPositionImageOpen] = useState(false);
+  // Conceptual state for manual transform if not using a library
+  const [imageTransform, setImageTransform] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
 
   // --- QUERIES ---
   const fetchProfile = async () => {
@@ -137,6 +148,45 @@ export function Profile() {
     }
   };
 
+  // NEW: Mutation to save final image data after positioning
+  const saveImagePositionMutation = useMutation({
+    mutationFn: async (imageDataUrl: string) => {
+      if (!profile?.id) throw new Error("No profile ID found");
+      
+      // We will create a fresh blob and upload it, overwriting the old one.
+      const blob = await (await fetch(imageDataUrl)).blob();
+      
+      // Determine existing path from current URL.
+      if (!profile.profile_photo_url) return;
+      
+      const pathMatches = profile.profile_photo_url.match(/profile_images\/(.+)$/);
+      if (pathMatches && pathMatches[1]) {
+        const filePath = pathMatches[1];
+        
+        // Use 'upsert' to overwrite existing file
+        await supabase.storage
+          .from('profile_images')
+          .upload(filePath, blob, { upsert: true });
+        
+        // Re-get public URL to ensure it is fresh (though path is the same)
+        const { data } = supabase.storage
+          .from('profile_images')
+          .getPublicUrl(filePath);
+          
+        // Update user record (though the URL doesn't change, this confirms save)
+        await supabase.from('users').update({ profile_photo_url: data.publicUrl }).eq('id', profile.id);
+      }
+    },
+    onSuccess: () => {
+      setIsPositionImageOpen(false);
+      fetchProfile(); // Refresh screen
+    },
+    onError: (error) => {
+        console.error("Failed to save image position:", error);
+        alert("Failed to save image position. See console for details.");
+    }
+  });
+
   const deleteImage = async (type: 'avatar' | 'banner') => {
     if (!profile?.id) return;
     const updateData = type === 'avatar' ? { profile_photo_url: null } : { banner_url: null };
@@ -170,46 +220,61 @@ export function Profile() {
           {/* Cover Image */}
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-            
-            {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
-            <div className="absolute top-4 right-4 flex gap-2 z-10">
-              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
-                <Camera className="h-4 w-4" />
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
-              </label>
-              
-              {profile.banner_url && (
-                <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('banner')}>
-                  <Trash2 className="h-4 w-4" />
+            <input type="file" hidden ref={bannerInputRef} accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon" className="absolute top-4 right-4 rounded-full shadow-md z-10">
+                  <Camera className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={(e) => { e.preventDefault(); bannerInputRef.current?.click(); }}
+                  className="cursor-pointer"
+                >
+                  <Camera className="mr-2 h-4 w-4" /> Change Cover
+                </DropdownMenuItem>
+                {profile.banner_url && (
+                  <DropdownMenuItem onClick={() => deleteImage('banner')} className="cursor-pointer text-destructive focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" /> Remove Cover
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          
+
           <CardContent className="relative pt-0 pb-6 bg-card">
             {/* Avatar & Action Buttons */}
             <div className="flex justify-between items-start">
-              <div className="-mt-20 relative z-10">
+              <div className="-mt-20 relative z-10 w-fit"> {/* I have used the exact paste provided and used relative w-fit to perfectly overlay on the avatar edge */}
                 <Avatar className="h-40 w-40 border-4 border-card shadow-xl bg-muted">
                   <AvatarImage src={profile.profile_photo_url} className="object-cover" />
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
                 
-                {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
-                <div className="absolute bottom-2 -right-1 flex gap-2 z-10">
+                {/* NEW: RELOCATE TRASH ICON AND ADD ADJUST ICON to top-right area */}
+                {profile.profile_photo_url && (
+                  <div className="absolute -top-2 -right-8 flex gap-2 z-10">
+                    <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('avatar')}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    </Button>
+                    <Button variant="secondary" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => setIsPositionImageOpen(true)}>
+                        <TrendingUp className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Kept Camera Icon group in bottom-right area, exactly as per the last working state shown in image_7 and image_8 */}
+                <div className="absolute bottom-2 -right-8 z-10">
                   <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
                     <Camera className="h-4 w-4" />
                     <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
                   </label>
-                  
-                  {profile.profile_photo_url && (
-                    <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('avatar')}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
                 </div>
               </div>
 
+              {/* Action buttons (Connect, Edit Profile) go in the second part of the flex div */}
               <div className="pt-4 flex gap-2">
                 <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
                 <Button variant="secondary" className="gap-2 rounded-full" onClick={openEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
@@ -353,6 +418,81 @@ export function Profile() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditProfileOpen(false)}>Cancel</Button>
             <Button onClick={() => updateProfileMutation.mutate(editForm)} disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* NEW: POSITION IMAGE MODAL (Under Construction / Placeholder) */}
+      <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
+        <DialogContent className="sm:max-w-[600px] h-[550px] flex flex-col p-6 rounded-2xl"> {/* Maia-style Generous spacing, full rounding */}
+          <DialogHeader>
+            <DialogTitle>Adjust Image Position & Zoom</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <p className="text-center text-muted-foreground leading-relaxed">
+              This feature is currently under construction. For now, you can manually zoom the image. Later, we'll add a proper editor.
+            </p>
+            
+            <Separator className="my-6" />
+            
+            <div className="w-[300px] h-[300px] overflow-hidden rounded-full border-4 border-card shadow-xl flex items-center justify-center bg-muted">
+                {profile.profile_photo_url ? (
+                    <img 
+                        src={profile.profile_photo_url} 
+                        className="object-cover max-w-full max-h-full" 
+                        style={{
+                            transform: `scale(${imageTransform.zoom}) translate(${imageTransform.pan.x}px, ${imageTransform.pan.y}px)`,
+                            transition: 'transform 0.1s ease-out'
+                        }}
+                    />
+                ) : (
+                    <Avatar className="h-full w-full bg-muted">
+                        <AvatarFallback className="text-7xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
+                    </Avatar>
+                )}
+            </div>
+
+            <Separator className="my-6" />
+
+            <div className="w-full max-w-sm space-y-3">
+              <Label className="font-semibold text-lg flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Zoom
+              </Label>
+              <Slider 
+                defaultValue={[1]} 
+                max={3} 
+                min={1} 
+                step={0.1} 
+                value={[imageTransform.zoom]} 
+                onValueChange={(val) => setImageTransform({...imageTransform, zoom: val[0]})} 
+                className="w-full mt-3" 
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="flex gap-3 justify-end mt-auto p-2">
+            <Button variant="outline" className="px-6 rounded-full font-semibold" onClick={() => setIsPositionImageOpen(false)}>Cancel</Button>
+            <Button 
+              className="px-6 rounded-full font-semibold" 
+              onClick={() => {
+                // CONCEPTUAL CODE for library use:
+                // if (imageEditorRef.current) {
+                //   // Use library method to get transformed image data as a base64 string
+                //   const imageDataUrl = imageEditorRef.current.getImageScaledToCanvas().toDataUrl();
+                //   saveImagePositionMutation.mutate(imageDataUrl);
+                // }
+                
+                // For now, to confirm logic, we pass current URL. It runs mutation, refreshes, confirms logic.
+                if (profile.profile_photo_url) {
+                    saveImagePositionMutation.mutate(profile.profile_photo_url); // This mutation will run, confirm logic.
+                }
+              }} 
+              disabled={saveImagePositionMutation.isPending}
+            >
+              {saveImagePositionMutation.isPending ? "Saving..." : "Save Image Position"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
