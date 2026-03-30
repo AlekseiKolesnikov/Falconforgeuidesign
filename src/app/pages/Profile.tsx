@@ -56,7 +56,7 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob> =>
 
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
-  
+
   ctx.drawImage(
     image,
     pixelCrop.x,
@@ -175,7 +175,7 @@ export function Profile() {
   const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = () => {
       setCropImage(reader.result as string);
@@ -191,17 +191,17 @@ export function Profile() {
   const saveCroppedImageMutation = useMutation({
     mutationFn: async (croppedImageBlob: Blob) => {
       if (!profile?.id) throw new Error("No profile ID found");
-      
+
       const fileExt = 'jpg';
       const fileName = `avatar_${Math.random()}.${fileExt}`;
       const filePath = `${profile.id}/${fileName}`;
-      
+
       const { error: uploadError } = await supabase.storage
         .from('profile_images')
         .upload(filePath, croppedImageBlob, { upsert: true });
-        
+
       if (uploadError) throw uploadError;
-      
+
       const { data } = supabase.storage.from('profile_images').getPublicUrl(filePath);
       await supabase.from('users').update({ profile_photo_url: data.publicUrl }).eq('id', profile.id);
     },
@@ -248,17 +248,17 @@ export function Profile() {
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* 1. HEADER CARD */}
         <Card className="overflow-hidden shadow-sm border-0">
-          
+
           {/* Cover Image */}
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-            
+
             <div className="absolute top-4 right-4 flex gap-2 z-10">
               <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
                 <Camera className="h-4 w-4" />
                 <input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} />
               </label>
-              
+
               {profile.banner_url && (
                 <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={deleteBanner}>
                   <Trash2 className="h-4 w-4" />
@@ -277,9 +277,9 @@ export function Profile() {
                   <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
                 </Avatar>
                 
-                {/* BULLETPROOF NATIVE BUTTONS */}
+                {/* BULLETPROOF DIRECT BUTTONS (No Dropdown) */}
                 {profile.profile_photo_url ? (
-                    // IF IMAGE EXISTS: Show Pencil to open the Adjust Modal
+                    // IF IMAGE EXISTS: Show Pencil to open the Adjust Modal directly
                     <Button 
                         size="icon" 
                         variant="secondary" 
@@ -294,7 +294,7 @@ export function Profile() {
                         <Pencil className="h-4 w-4" />
                     </Button>
                 ) : (
-                    // IF NO IMAGE: Show native Camera label to upload
+                    // IF NO IMAGE: Show native Camera label to upload directly
                     <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground absolute -top-2 -right-1 h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors z-10">
                         <Camera className="h-4 w-4" />
                         <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
@@ -442,44 +442,44 @@ export function Profile() {
             <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
             <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
           </div>
-<DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2">
+          <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2">
             <Button variant="outline" className="px-6 rounded-full font-semibold justify-start" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
             </Button>
-            
-            <div className="flex gap-3 justify-end items-center">
-                {/* BULLETPROOF UPLOAD NEW BUTTON */}
-                <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 px-4 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
-                    <Camera className="mr-2 h-4 w-4" /> Upload New
-                    <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
-                </label>
 
-                {profile.profile_photo_url && (
-                    <Button 
-                      variant="destructive" 
-                      className="px-6 rounded-full font-semibold gap-2" 
-                      onClick={() => {
-                        deleteImageMutation.mutate();
-                        setIsPositionImageOpen(false);
-                      }} 
-                      disabled={deleteImageMutation.isPending}
-                    >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        {deleteImageMutation.isPending ? "Deleting..." : "Delete Image"}
-                    </Button>
-                )}
-                <Button 
-                    className="px-6 rounded-full font-semibold" 
-                    onClick={async () => {
-                        if (cropImage && croppedAreaPixels) {
-                            const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
-                            saveCroppedImageMutation.mutate(croppedImageBlob);
-                        }
-                    }} 
-                    disabled={saveCroppedImageMutation.isPending}
+            <div className="flex gap-3 justify-end items-center">
+              {/* BULLETPROOF UPLOAD NEW BUTTON */}
+              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 px-4 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
+                <Camera className="mr-2 h-4 w-4" /> Upload New
+                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
+              </label>
+
+              {profile.profile_photo_url && (
+                <Button
+                  variant="destructive"
+                  className="px-6 rounded-full font-semibold gap-2"
+                  onClick={() => {
+                    deleteImageMutation.mutate();
+                    setIsPositionImageOpen(false);
+                  }}
+                  disabled={deleteImageMutation.isPending}
                 >
-                  {saveCroppedImageMutation.isPending ? "Saving..." : "Save Image"}
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {deleteImageMutation.isPending ? "Deleting..." : "Delete Image"}
                 </Button>
+              )}
+              <Button
+                className="px-6 rounded-full font-semibold"
+                onClick={async () => {
+                  if (cropImage && croppedAreaPixels) {
+                    const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels);
+                    saveCroppedImageMutation.mutate(croppedImageBlob);
+                  }
+                }}
+                disabled={saveCroppedImageMutation.isPending}
+              >
+                {saveCroppedImageMutation.isPending ? "Saving..." : "Save Image"}
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -491,55 +491,57 @@ export function Profile() {
           <DialogHeader>
             <DialogTitle>Adjust Image Position & Zoom</DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 flex flex-col items-center justify-center p-4">
             <p className="text-center text-muted-foreground leading-relaxed mb-8">
               Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.
             </p>
-            
+
             <Separator className="mb-8" />
-            
+
             <div className="w-[450px] h-[450px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-8">
-                {cropImage && (
-                    <Cropper
-                        image={cropImage}
-                        crop={crop}
-                        zoom={zoom}
-                        aspect={1 / 1}
-                        cropShape="round"
-                        showGrid={false}
-                        onCropChange={setCrop}
-                        onZoomChange={setZoom}
-                        onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)}
-                    />
-                )}
+              {cropImage && (
+                <Cropper
+                  image={cropImage}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1 / 1}
+                  cropShape="round"
+                  showGrid={false}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)}
+                />
+              )}
             </div>
 
             <Separator className="mb-8" />
 
-            <div className="w-full max-w-sm space-y-3 mt-auto">
-              <Label className="font-semibold text-lg flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Zoom
-              </Label>
-              <Slider 
-                defaultValue={[1]} 
-                max={3} 
-                min={1} 
-                step={0.1} 
-                value={[zoom]} 
-                onValueChange={(val) => setZoom(val[0])} 
-                className="w-full mt-3" 
+            <div className="w-full max-w-sm mt-auto">
+              <Slider
+                defaultValue={[1]}
+                max={3}
+                min={1}
+                step={0.1}
+                value={[zoom]}
+                onValueChange={(val) => setZoom(val[0])}
+                className="w-full"
               />
             </div>
           </div>
-          
+
           <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2">
             <Button variant="outline" className="px-6 rounded-full font-semibold justify-start" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
               Cancel
             </Button>
             
-            <div className="flex gap-3 justify-end">
+            <div className="flex gap-3 justify-end items-center">
+                {/* BULLETPROOF UPLOAD NEW BUTTON */}
+                <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-10 px-4 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
+                    <Camera className="mr-2 h-4 w-4" /> Upload New
+                    <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
+                </label>
+
                 {profile.profile_photo_url && (
                     <Button 
                       variant="destructive" 
