@@ -170,14 +170,14 @@ export function Profile() {
           {/* Cover Image */}
           <div className="h-64 relative bg-muted">
             <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-            
+
             {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
             <div className="absolute top-4 right-4 flex gap-2 z-10">
               <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
                 <Camera className="h-4 w-4" />
                 <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} />
               </label>
-              
+
               {profile.banner_url && (
                 <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('banner')}>
                   <Trash2 className="h-4 w-4" />
@@ -185,35 +185,31 @@ export function Profile() {
               )}
             </div>
           </div>
-          
-          <CardContent className="relative pt-0 pb-6 bg-card">
-            {/* Avatar & Action Buttons */}
-            <div className="flex justify-between items-start">
-              <div className="-mt-20 relative z-10">
-                <Avatar className="h-40 w-40 border-4 border-card shadow-xl bg-muted">
-                  <AvatarImage src={profile.profile_photo_url} className="object-cover" />
-                  <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
-                </Avatar>
-                
-                {/* BULLETPROOF BUTTONS (No Dropdown Menu) */}
-                <div className="absolute bottom-2 -right-8 flex gap-2 z-10">
-                  <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
-                    <Camera className="h-4 w-4" />
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
-                  </label>
-                  
-                  {profile.profile_photo_url && (
-                    <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={() => deleteImage('avatar')}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
 
-              <div className="pt-4 flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
-                <Button variant="secondary" className="gap-2 rounded-full" onClick={openEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
-              </div>
+          <CardContent className="relative pt-0 pb-6 bg-card">
+            {/* Avatar & Action Buttons Container */}
+            <div className="-mt-20 relative z-10">
+              <Avatar className="h-40 w-40 border-4 border-card shadow-xl bg-muted">
+                <AvatarImage src={profile.profile_photo_url} className="object-cover" />
+                <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
+              </Avatar>
+
+              {/* The hidden file input lives at the top of the container */}
+              <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
+
+              {/* BULLETPROOF BUTTONS: Individually positioned over the avatar circle */}
+
+              {/* 1. Upload Button (Camera) - Positioned Bottom-Right */}
+              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors absolute bottom-2 right-2 z-10">
+                <Camera className="h-4 w-4" />
+              </label>
+
+              {/* 2. Delete Button (Trash) - Positioned Top-Right, only shows if image exists */}
+              {profile.profile_photo_url && (
+                <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md absolute top-2 right-2 z-10" onClick={() => deleteImage('avatar')}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
             {/* Basic Info */}
