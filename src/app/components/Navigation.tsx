@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase"; 
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { useQuery } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,12 +33,13 @@ interface NavUserData {
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [userData, setUserData] = useState<NavUserData | null>(null);
 
-  useEffect(() => {
-    const fetchSessionUser = async () => {
+  // Upgraded to React Query! This automatically listens to the "save" button on your Profile page.
+  const { data: userData } = useQuery<NavUserData | null>({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) return null;
 
       const { data: dbUser } = await supabase
         .from("users")
@@ -46,24 +47,22 @@ export function Navigation() {
         .eq("auth_users_uuid", user.id)
         .single();
 
+      // Keeping your original fallback logic just in case
       const { data: profileData } = await supabase
         .from("profiles")
         .select("avatar")
         .eq("email", user.email)
         .maybeSingle();
 
-      if (dbUser) {
-        setUserData({
-          firstName: dbUser.first_name || "",
-          lastName: dbUser.last_name || "",
-          email: dbUser.email || user.email || "",
-          avatarUrl: profileData?.avatar || dbUser.profile_photo_url || "",
-        });
-      }
-    };
-
-    fetchSessionUser();
-  }, []);
+      return {
+        firstName: dbUser?.first_name || "",
+        lastName: dbUser?.last_name || "",
+        email: dbUser?.email || user.email || "",
+        // Prioritizing users.profile_photo_url since that is exactly where Profile.tsx saves the image
+        avatarUrl: dbUser?.profile_photo_url || profileData?.avatar || "",
+      };
+    }
+  });
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -77,8 +76,8 @@ export function Navigation() {
   ];
 
   const getInitials = () => {
-    if (!userData) return "U";
-    return `${userData.firstName.charAt(0)}${userData.lastName.charAt(0)}`.toUpperCase();
+    if (!userData || !userData.firstName) return "U";
+    return `${userData.firstName.charAt(0)}${userData.lastName?.charAt(0) || ""}`.toUpperCase();
   };
 
   return (
@@ -139,7 +138,8 @@ export function Navigation() {
           {/* Direct Link to Profile */}
           <Link to="/profile/me" className="transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary rounded-full">
             <Avatar className="h-10 w-10 border-2 border-transparent hover:border-primary/50 transition-colors">
-              <AvatarImage src={userData?.avatarUrl} alt={userData?.firstName || "Profile"} className="object-cover" />
+              {/* Added || undefined so Shadcn knows to show the initials fallback if the URL is empty */}
+              <AvatarImage src={userData?.avatarUrl || undefined} alt={userData?.firstName || "Profile"} className="object-cover" />
               <AvatarFallback className="bg-primary text-primary-foreground font-medium">
                 {getInitials()}
               </AvatarFallback>
