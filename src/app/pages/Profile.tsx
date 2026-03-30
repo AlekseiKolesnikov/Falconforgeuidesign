@@ -283,49 +283,27 @@ export function Profile() {
       let imageUrl = null;
       if (newPostImage) {
         const filePath = `${profile.id}/post_${Math.random()}.${newPostImage.name.split('.').pop()}`;
-        const { error: uploadError } = await supabase.storage.from('post_images').upload(filePath, newPostImage);
-        if (uploadError) throw uploadError;
+        await supabase.storage.from('post_images').upload(filePath, newPostImage);
         const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
         imageUrl = data.publicUrl;
       }
-      const { error } = await supabase.from('posts').insert({
-        user_id: profile.id,
-        content: newPostContent.trim(),
-        image_url: imageUrl,
-      });
-      if (error) throw error;
+      await supabase.from('posts').insert({ user_id: profile.id, content: newPostContent.trim(), image_url: imageUrl });
     },
-    onSuccess: () => {
-      setIsCreatePostOpen(false);
-      setNewPostContent("");
-      setNewPostImage(null);
-      setNewPostImagePreview(null);
-      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
-    }
+    onSuccess: () => { setIsCreatePostOpen(false); setNewPostContent(""); setNewPostImage(null); setNewPostImagePreview(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
   });
 
   const deletePostMutation = useMutation({
-    mutationFn: async (postId: number) => {
-      const { error } = await supabase.from('posts').delete().eq('id', postId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setPostToDelete(null);
-      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
-    }
+    mutationFn: async (postId: number) => { await supabase.from('posts').delete().eq('id', postId); },
+    onSuccess: () => { setPostToDelete(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
   });
 
   const updatePostMutation = useMutation({
     mutationFn: async ({ postId, content }: { postId: number, content: string }) => {
-      const { error } = await supabase.from('posts').update({ content: content.trim() }).eq('id', postId);
-      if (error) throw error;
+      await supabase.from('posts').update({ content: content.trim() }).eq('id', postId);
     },
-    onSuccess: () => {
-      setEditingPostId(null);
-      queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] });
-    }
+    onSuccess: () => { setEditingPostId(null); queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] }); }
   });
-
+  
   // Early returns must stay AFTER the hooks above
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
@@ -473,7 +451,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 3. ACTIVITY CARD */}
+        {/* ACTIVITY CARD */}
         <Card className="shadow-sm border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -488,56 +466,27 @@ export function Profile() {
                 <Card key={post.id} className="border border-border shadow-none overflow-hidden flex flex-col relative group">
                   <CardHeader className="p-4 pb-2">
                     <div className="flex items-start justify-between">
-
                       {editingPostId === post.id ? (
-                        /* INLINE EDIT MODE (Bigger Margins & Padding) */
                         <div className="w-full space-y-3 mt-2">
-                          <Textarea
-                            value={editPostContent}
-                            onChange={(e) => setEditPostContent(e.target.value)}
-                            className="min-h-[100px] p-4 border border-border rounded-xl focus-visible:ring-1 bg-background"
-                          />
+                          <Textarea value={editPostContent} onChange={(e) => setEditPostContent(e.target.value)} className="min-h-[100px] p-4 border border-border rounded-xl focus-visible:ring-1 bg-background" />
                           <div className="flex justify-end gap-2">
                             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditingPostId(null)}>Cancel</Button>
-                            <Button
-                              size="sm"
-                              className="rounded-full"
-                              onClick={() => updatePostMutation.mutate({ postId: post.id, content: editPostContent })}
-                              disabled={updatePostMutation.isPending || !editPostContent.trim()}
-                            >
-                              {updatePostMutation.isPending ? 'Saving...' : 'Save'}
-                            </Button>
+                            <Button size="sm" className="rounded-full" onClick={() => updatePostMutation.mutate({ postId: post.id, content: editPostContent })}>Save</Button>
                           </div>
                         </div>
                       ) : (
-                        /* VIEW MODE */
                         <>
                           <p className="text-sm text-foreground line-clamp-2 pr-8">{post.content}</p>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2"><MoreHorizontal className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                className="cursor-pointer"
-                                onSelect={() => {
-                                  setEditingPostId(post.id);
-                                  setEditPostContent(post.content || "");
-                                }}
-                              >
-                                <Pencil className="mr-2 h-4 w-4" /> Edit Post
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingPostId(post.id); setEditPostContent(post.content); }}>
+                                <Pencil className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
-
-                              <DropdownMenuItem
-                                className="text-destructive cursor-pointer"
-                                onSelect={() => {
-                                  // Use a tiny timeout to ensure the dropdown closes before the state change
-                                  setTimeout(() => setPostToDelete(post), 100);
-                                }}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete Post
+                              <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); setPostToDelete(post); }}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -764,6 +713,20 @@ export function Profile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* WORKING ALERT DIALOG (Same as Feed.tsx) */}
+      <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. This will permanently delete your post.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (postToDelete) { deletePostMutation.mutate(postToDelete.id); } }}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
