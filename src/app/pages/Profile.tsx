@@ -287,7 +287,7 @@ export function Profile() {
                   <Button
                     size="icon"
                     variant="secondary"
-                    className="absolute -bottom-1 -right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80"
+                    className="absolute -bottom-4 -right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80"
                     onClick={() => {
                       setCropImage(profile.profile_photo_url || null); // Load current image
                       setZoom(1);
