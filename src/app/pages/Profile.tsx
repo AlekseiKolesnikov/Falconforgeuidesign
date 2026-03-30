@@ -461,7 +461,7 @@ export function Profile() {
 
       {/* 2. TRUE IMAGE POSITION MODAL */}
       <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
-        <DialogContent className="sm:max-w-[700px] h-[750px] flex flex-col p-10 rounded-2xl">
+        <DialogContent className="sm:max-w-[620px] h-fit max-h-[95vh] flex flex-col p-8 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Adjust Image Position & Zoom</DialogTitle>
           </DialogHeader>
