@@ -491,7 +491,7 @@ export function Profile() {
             </div>
           </div>
 
-          {/* No border-t, uniform gap spacing */}
+          {/* SINGLE, CLEAN FOOTER */}
           <DialogFooter className="flex gap-3 justify-between items-center mt-auto p-2 pb-4">
             {/* Cancel Button */}
             <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>
@@ -499,13 +499,13 @@ export function Profile() {
             </Button>
 
             <div className="flex gap-3 justify-end items-center">
-              {/* 1. Upload New (Label fixed with text-sm whitespace-nowrap to match button exactly) */}
+              {/* 1. Upload New */}
               <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm whitespace-nowrap h-10 w-[140px] inline-flex items-center justify-center rounded-full font-semibold transition-colors">
                 <Camera className="mr-2 h-4 w-4 shrink-0" /> Upload New
                 <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
               </label>
 
-              {/* 2. Delete Image (Shortened text to fit 140px perfectly) */}
+              {/* 2. Delete Image */}
               {profile.profile_photo_url && (
                 <Button
                   variant="destructive"
@@ -521,7 +521,7 @@ export function Profile() {
                 </Button>
               )}
 
-              {/* 3. Save Image (Shortened text to fit 140px perfectly) */}
+              {/* 3. Save Image */}
               <Button
                 className="h-10 w-[140px] rounded-full font-semibold"
                 onClick={async () => {
