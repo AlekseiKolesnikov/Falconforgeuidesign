@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { supabase } from "../../../lib/supabase"; // Adjust path if needed
+import { supabase } from "../../../lib/supabase"; 
 
 interface ProfileEducationProps {
   education: any[];
@@ -29,17 +29,27 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
     if (!userId || !form.school_name) return;
     setIsSaving(true);
     
-    const { error } = await supabase.from('education').insert({
+    // Safely parse integers to satisfy SQL constraints
+    const payload = {
       user_id: userId,
-      ...form
-    });
+      school_name: form.school_name.trim(),
+      degree: form.degree.trim() || null,
+      field_of_study: form.field_of_study.trim() || null,
+      start_year: form.start_year ? parseInt(form.start_year) : null,
+      end_year: form.end_year ? parseInt(form.end_year) : null
+    };
+
+    const { error } = await supabase.from('education').insert(payload);
 
     setIsSaving(false);
     
-    if (!error) {
+    if (error) {
+      console.error("Supabase Error:", error);
+      alert("Failed to save education: " + error.message);
+    } else {
       setIsOpen(false);
       setForm({ school_name: "", degree: "", field_of_study: "", start_year: "", end_year: "" });
-      onRefresh(); // Refresh profile data
+      onRefresh(); 
     }
   };
 
@@ -72,13 +82,12 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
         </CardContent>
       </Card>
 
-      {/* ISOLATED ADD EDUCATION MODAL */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-[500px] rounded-2xl">
           <DialogHeader><DialogTitle>Add Education</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
-              <Label>School</Label>
+              <Label>School *</Label>
               <Input placeholder="e.g. University of Montevallo" value={form.school_name} onChange={(e) => setForm({...form, school_name: e.target.value})} />
             </div>
             <div className="space-y-2">
@@ -92,11 +101,13 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start Year</Label>
-                <Input placeholder="e.g. 2022" value={form.start_year} onChange={(e) => setForm({...form, start_year: e.target.value})} />
+                {/* Changed to type="number" */}
+                <Input type="number" placeholder="e.g. 2022" value={form.start_year} onChange={(e) => setForm({...form, start_year: e.target.value})} />
               </div>
               <div className="space-y-2">
                 <Label>End Year</Label>
-                <Input placeholder="e.g. 2026" value={form.end_year} onChange={(e) => setForm({...form, end_year: e.target.value})} />
+                {/* Changed to type="number" */}
+                <Input type="number" placeholder="e.g. 2026" value={form.end_year} onChange={(e) => setForm({...form, end_year: e.target.value})} />
               </div>
             </div>
           </div>

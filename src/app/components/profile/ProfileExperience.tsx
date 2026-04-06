@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import { supabase } from "../../../lib/supabase"; // Adjust path if needed
+import { supabase } from "../../../lib/supabase"; 
 
 interface ProfileExperienceProps {
   experiences: any[];
@@ -31,18 +31,29 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
     if (!userId || !form.title || !form.organization_name) return;
     setIsSaving(true);
     
-    const { error } = await supabase.from('experiences').insert({
+    // Safely convert empty strings to null to satisfy SQL constraints
+    const payload = {
       user_id: userId,
-      ...form,
-      is_current: !form.end_date // Automatically true if no end date provided
-    });
+      title: form.title.trim(),
+      organization_name: form.organization_name.trim(),
+      location: form.location.trim() || null,
+      start_date: form.start_date || null, // Now comes natively formatted from type="date"
+      end_date: form.end_date || null,
+      description: form.description.trim() || null,
+      is_current: !form.end_date // True if end_date is left blank
+    };
+
+    const { error } = await supabase.from('experiences').insert(payload);
 
     setIsSaving(false);
     
-    if (!error) {
+    if (error) {
+      console.error("Supabase Error:", error);
+      alert("Failed to save experience: " + error.message); 
+    } else {
       setIsOpen(false);
       setForm({ title: "", organization_name: "", location: "", start_date: "", end_date: "", description: "" });
-      onRefresh(); // Tells the main profile page to fetch the new data
+      onRefresh(); 
     }
   };
 
@@ -68,7 +79,10 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
                   <h3 className="font-semibold text-lg text-foreground">{exp.title}</h3>
                   <p className="text-foreground font-medium">{exp.organization_name}</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    {exp.start_date} - {exp.is_current || !exp.end_date ? 'Present' : exp.end_date} {exp.location && `• ${exp.location}`}
+                    {/* Display just the year and month if we want to format it nicely */}
+                    {exp.start_date ? new Date(exp.start_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : ''} - 
+                    {exp.is_current || !exp.end_date ? ' Present' : ` ${new Date(exp.end_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`}
+                    {exp.location && ` • ${exp.location}`}
                   </p>
                   {exp.description && (
                     <p className="text-foreground text-sm mt-2.5 whitespace-pre-wrap leading-relaxed">{exp.description}</p>
@@ -80,17 +94,16 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
         </CardContent>
       </Card>
 
-      {/* ISOLATED ADD EXPERIENCE MODAL */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-[550px] rounded-2xl">
           <DialogHeader><DialogTitle>Add Experience</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
-              <Label>Title</Label>
+              <Label>Title *</Label>
               <Input placeholder="e.g. Software Engineer" value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label>Company Name</Label>
+              <Label>Company Name *</Label>
               <Input placeholder="e.g. Google" value={form.organization_name} onChange={(e) => setForm({...form, organization_name: e.target.value})} />
             </div>
             <div className="space-y-2">
@@ -100,11 +113,13 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start Date</Label>
-                <Input placeholder="e.g. Jan 2023" value={form.start_date} onChange={(e) => setForm({...form, start_date: e.target.value})} />
+                {/* Changed to type="date" */}
+                <Input type="date" value={form.start_date} onChange={(e) => setForm({...form, start_date: e.target.value})} />
               </div>
               <div className="space-y-2">
-                <Label>End Date</Label>
-                <Input placeholder="e.g. Present (or leave blank)" value={form.end_date} onChange={(e) => setForm({...form, end_date: e.target.value})} />
+                <Label>End Date (Leave blank if current)</Label>
+                {/* Changed to type="date" */}
+                <Input type="date" value={form.end_date} onChange={(e) => setForm({...form, end_date: e.target.value})} />
               </div>
             </div>
             <div className="space-y-2">
