@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
-import { PostCard } from "../components/PostCard"; 
+import { PostCard } from "../components/PostCard";
 
 // --- INTERFACES ---
 interface ProfileData {
@@ -338,9 +338,11 @@ export function Profile() {
           <CardContent>
             <div className="grid md:grid-cols-2 gap-4">
               {userPosts.map((post: any) => (
-                <PostCard 
+                <PostCard
                   key={post.id}
                   post={post}
+                  currentUser={profile}         // <-- Pass the profile here so it knows you are the owner!
+                  hideAuthor={true}             // <-- Turns off the Avatar and Name!
                   onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
                   onDelete={(postId) => deletePostMutation.mutate(postId)}
                   isUpdating={updatePostMutation.isPending}

@@ -34,9 +34,10 @@ interface PostCardProps {
   isUpdating?: boolean;
   onToggleLike?: (postId: number, hasLiked: boolean) => void;
   onCreateComment?: (postId: number, text: string) => void;
+  hideAuthor?: boolean; // <-- Added this new prop
 }
 
-export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, onToggleLike, onCreateComment }: PostCardProps) {
+export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, onToggleLike, onCreateComment, hideAuthor }: PostCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content || "");
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
@@ -68,39 +69,47 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
     <>
       <Card className="shadow-sm border-0 overflow-hidden">
         {/* POST HEADER (Avatar & Name) */}
-        <CardHeader className="pb-3 pt-5">
+        <CardHeader className={hideAuthor ? "p-4 pb-0" : "pb-3 pt-5"}>
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              {user && (
-                <Link to={`/profile/${user.id}`} className="cursor-pointer hover:opacity-80 transition-opacity shrink-0">
-                  <Avatar className="w-12 h-12">
-                    <AvatarImage src={user.profile_photo_url} className="object-cover" />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {user.first_name?.[0]}{user.last_name?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                </Link>
-              )}
-              
-              <div>
-                {user ? (
-                  <Link to={`/profile/${user.id}`} className="hover:underline cursor-pointer">
-                    <h3 className="font-semibold text-base text-foreground leading-none">
-                      {user.first_name} {user.last_name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                      {user.headline || 'Student'}
-                    </p>
+            
+            {/* Conditionally render Author Info or just the Date */}
+            {!hideAuthor ? (
+              <div className="flex items-center gap-3">
+                {user && (
+                  <Link to={`/profile/${user.id}`} className="cursor-pointer hover:opacity-80 transition-opacity shrink-0">
+                    <Avatar className="w-12 h-12">
+                      <AvatarImage src={user.profile_photo_url} className="object-cover" />
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        {user.first_name?.[0]}{user.last_name?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
                   </Link>
-                ) : (
-                  <h3 className="font-semibold text-base text-foreground leading-none">Unknown User</h3>
                 )}
+                
+                <div>
+                  {user ? (
+                    <Link to={`/profile/${user.id}`} className="hover:underline cursor-pointer">
+                      <h3 className="font-semibold text-base text-foreground leading-none">
+                        {user.first_name} {user.last_name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                        {user.headline || 'Student'}
+                      </p>
+                    </Link>
+                  ) : (
+                    <h3 className="font-semibold text-base text-foreground leading-none">Unknown User</h3>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">• {postDate}</span>
               </div>
-              <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">• {postDate}</span>
-            </div>
+            ) : (
+              <div className="text-xs text-muted-foreground mt-1">{postDate}</div>
+            )}
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground sm:hidden">{new Date(post.created_at).toLocaleDateString()}</span>
+              {!hideAuthor && (
+                <span className="text-xs text-muted-foreground sm:hidden">{new Date(post.created_at).toLocaleDateString()}</span>
+              )}
               {isOwner && (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
@@ -155,7 +164,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
             </div>
           ) : (
             post.content && (
-              <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3">
+              <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3 mt-2">
                 {post.content}
               </p>
             )
