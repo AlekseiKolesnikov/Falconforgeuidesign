@@ -12,6 +12,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { supabase } from "../../../lib/supabase"; 
 
 interface ProfileEducationProps {
@@ -24,6 +34,8 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null); // State for the pretty delete modal
+
   const [form, setForm] = useState({
     school_name: "",
     degree: "",
@@ -50,9 +62,10 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
     setIsOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this education entry?")) {
-      await supabase.from('education').delete().eq('id', id);
+  const confirmDelete = async () => {
+    if (deleteId) {
+      await supabase.from('education').delete().eq('id', deleteId);
+      setDeleteId(null);
       onRefresh();
     }
   };
@@ -114,7 +127,6 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
                   <p className="text-sm text-muted-foreground mt-0.5">{edu.start_year || ''} - {edu.end_year || 'Expected'}</p>
                 </div>
 
-                {/* 3-Dot Edit Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
                     <MoreHorizontal className="h-5 w-5" />
@@ -123,7 +135,7 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
                     <DropdownMenuItem className="cursor-pointer" onSelect={() => openEdit(edu)}>
                       <Pencil className="mr-2 h-4 w-4" /> Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => handleDelete(edu.id)}>
+                    <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => setDeleteId(edu.id)}>
                       <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -169,6 +181,24 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Pretty Delete Confirmation Modal */}
+      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent className="rounded-2xl sm:max-w-[400px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Delete Education?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this education entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full px-6">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full px-6" onClick={confirmDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

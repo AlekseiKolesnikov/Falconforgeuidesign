@@ -13,6 +13,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { supabase } from "../../../lib/supabase"; 
 
 interface ProfileExperienceProps {
@@ -25,6 +35,8 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null); // State for the pretty delete modal
+
   const [form, setForm] = useState({
     title: "",
     organization_name: "",
@@ -53,9 +65,10 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
     setIsOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this experience?")) {
-      await supabase.from('experiences').delete().eq('id', id);
+  const confirmDelete = async () => {
+    if (deleteId) {
+      await supabase.from('experiences').delete().eq('id', deleteId);
+      setDeleteId(null);
       onRefresh();
     }
   };
@@ -77,11 +90,9 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
 
     let error;
     if (editingId) {
-      // UPDATE existing
       const { error: updateError } = await supabase.from('experiences').update(payload).eq('id', editingId);
       error = updateError;
     } else {
-      // INSERT new
       const { error: insertError } = await supabase.from('experiences').insert(payload);
       error = insertError;
     }
@@ -128,7 +139,6 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
                   )}
                 </div>
                 
-                {/* 3-Dot Edit Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
                     <MoreHorizontal className="h-5 w-5" />
@@ -137,7 +147,7 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
                     <DropdownMenuItem className="cursor-pointer" onSelect={() => openEdit(exp)}>
                       <Pencil className="mr-2 h-4 w-4" /> Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => handleDelete(exp.id)}>
+                    <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => setDeleteId(exp.id)}>
                       <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -187,6 +197,24 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Pretty Delete Confirmation Modal */}
+      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent className="rounded-2xl sm:max-w-[400px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Delete Experience?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this experience entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full px-6">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full px-6" onClick={confirmDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
