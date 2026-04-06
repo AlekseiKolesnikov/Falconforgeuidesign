@@ -1,171 +1,107 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase"; 
-import { Button } from "../components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import * as React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { useAuth } from "../../contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Home,
-  Briefcase,
-  Calendar,
-  LogOut,
-  Bell,
-  Search,
-} from "lucide-react";
-import { Input } from "../components/ui/input";
-
-interface NavUserData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  avatarUrl: string;
-}
+import { supabase } from "../../lib/supabase";
 
 export function Navigation() {
+  // FIXED: Removed signOut from here
+  const { session } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
 
-  // Upgraded to React Query! This automatically listens to the "save" button on your Profile page.
-  const { data: userData } = useQuery<NavUserData | null>({
-    queryKey: ['currentUser'],
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data: dbUser } = await supabase
-        .from("users")
-        .select("first_name, last_name, email, profile_photo_url")
-        .eq("auth_users_uuid", user.id)
+      if (!session?.user?.id) return null;
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_users_uuid', session.user.id)
         .single();
-
-      // Keeping your original fallback logic just in case
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("avatar")
-        .eq("email", user.email)
-        .maybeSingle();
-
-      return {
-        firstName: dbUser?.first_name || "",
-        lastName: dbUser?.last_name || "",
-        email: dbUser?.email || user.email || "",
-        // Prioritizing users.profile_photo_url since that is exactly where Profile.tsx saves the image
-        avatarUrl: dbUser?.profile_photo_url || profileData?.avatar || "",
-      };
-    }
+      return data;
+    },
+    enabled: !!session?.user?.id,
   });
 
+  // Helper to highlight the active tab
+  const isActive = (path: string) => location.pathname === path;
+
+  // FIXED: Added a simple logout handler using Supabase directly
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/"); 
-  };
-
-  const navItems = [
-    { href: "/feed", label: "Feed", icon: Home },
-    { href: "/opportunities", label: "Opportunities", icon: Briefcase },
-    { href: "/events", label: "Events", icon: Calendar },
-  ];
-
-  const getInitials = () => {
-    if (!userData || !userData.firstName) return "U";
-    return `${userData.firstName.charAt(0)}${userData.lastName?.charAt(0) || ""}`.toUpperCase();
   };
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center px-4">
-        {/* Logo */}
-        <Link to="/feed" className="flex items-center gap-2 mr-6">
-          <div className="bg-primary text-primary-foreground rounded-lg p-2">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <span className="hidden md:inline-block font-bold text-lg text-primary">
-            Falcon Forge
-          </span>
-        </Link>
-
-        {/* Search Bar */}
-        <div className="flex-1 max-w-md mr-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              type="search"
-              placeholder="Search people, posts, or opportunities..."
-              className="pl-10 bg-input-background"
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
+      <div className="container max-w-7xl mx-auto h-16 px-4 flex items-center relative">
+        
+        {/* 1. LEFT SECTION (Logo & Search) - Takes up 1/3 of the space */}
+        <div className="flex items-center gap-4 w-1/3">
+          <Link to="/feed" className="flex items-center gap-2 font-bold text-lg text-foreground hover:opacity-90">
+            <div className="bg-primary text-primary-foreground p-1.5 rounded-md flex items-center justify-center">
+              <Zap className="h-5 w-5 fill-current" />
+            </div>
+            <span className="hidden lg:block text-xl tracking-tight">Falcon Forge</span>
+          </Link>
+          
+          <div className="relative hidden md:block max-w-[240px] w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              type="search" 
+              placeholder="Search people, posts..." 
+              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9" 
             />
           </div>
         </div>
 
-        {/* Navigation Links */}
-        <div className="hidden lg:flex items-center gap-1 mr-4">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.href;
-            return (
-              <Link key={item.href} to={item.href}>
-                <Button
-                  variant={isActive ? "secondary" : "ghost"}
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Button>
-              </Link>
-            );
-          })}
-        </div>
+        {/* 2. CENTER SECTION (Nav Links) - Absolutely Centered */}
+        <nav className="hidden md:flex items-center gap-2 absolute left-1/2 transform -translate-x-1/2 h-full">
+          <Link to="/feed" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/feed') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+            <Home className="h-5 w-5" />
+            <span>Feed</span>
+          </Link>
+          
+          <Link to="/opportunities" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/opportunities') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+            <Briefcase className="h-5 w-5" />
+            <span>Opportunities</span>
+          </Link>
+          
+          <Link to="/events" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/events') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+            <Calendar className="h-5 w-5" />
+            <span>Events</span>
+          </Link>
+        </nav>
 
-        {/* Right side actions */}
-        <div className="flex items-center gap-3 ml-auto">
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
+        {/* 3. RIGHT SECTION (User Actions) - Takes up 1/3 of the space and aligns right */}
+        <div className="flex items-center justify-end gap-4 w-1/3 ml-auto">
+          
+          <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground">
             <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
+            {/* Notification Dot */}
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive border-2 border-background"></span>
           </Button>
 
-          {/* Direct Link to Profile */}
-          <Link to="/profile/me" className="transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary rounded-full">
-            <Avatar className="h-10 w-10 border-2 border-transparent hover:border-primary/50 transition-colors">
-              {/* Added || undefined so Shadcn knows to show the initials fallback if the URL is empty */}
-              <AvatarImage src={userData?.avatarUrl || undefined} alt={userData?.firstName || "Profile"} className="object-cover" />
-              <AvatarFallback className="bg-primary text-primary-foreground font-medium">
-                {getInitials()}
+          <Link to="/profile/me" className="cursor-pointer transition-transform hover:scale-105">
+            <Avatar className="h-8 w-8 border border-border">
+              <AvatarImage src={currentUser?.profile_photo_url} className="object-cover" />
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                {currentUser ? `${currentUser.first_name[0]}${currentUser.last_name[0]}` : "U"}
               </AvatarFallback>
             </Avatar>
           </Link>
 
-          {/* Dedicated Logout Button */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={handleLogout}
-            title="Log out"
-            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
+          {/* FIXED: Using the direct supabase handler here */}
+          <Button variant="ghost" size="icon" onClick={handleLogout} className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full">
             <LogOut className="h-5 w-5" />
           </Button>
+          
         </div>
-      </div>
 
-      {/* Mobile Bottom Navigation */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background">
-        <div className="flex items-center justify-around h-16 px-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.href;
-            return (
-              <Link key={item.href} to={item.href} className="flex flex-col items-center gap-1 min-w-0">
-                <Icon className={`h-5 w-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                <span className={`text-xs ${isActive ? "text-primary font-medium" : "text-muted-foreground"}`}>
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
       </div>
-    </nav>
+    </header>
   );
 }
