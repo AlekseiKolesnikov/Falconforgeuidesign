@@ -1,66 +1,35 @@
-import { Badge } from "../components/ui/badge";
 import { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { Navigation } from "../components/Navigation";
-import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card";
+import { Card, CardFooter, CardHeader } from "../components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
-import { Input } from "../components/ui/input";
 import { Separator } from "../components/ui/separator";
-import {
-  ThumbsUp, MessageCircle, MoreHorizontal,
-  Image as ImageIcon, Trash2, Send, X, Pencil
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../components/ui/alert-dialog";
+import { Image as ImageIcon, X } from "lucide-react";
 import { supabase } from '../../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+// IMPORT OUR NEW COMPONENT
+import { PostCard } from "../components/PostCard"; 
 
 export function Feed() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [content, setContent] = useState('');
-  const [postToDelete, setPostToDelete] = useState<any | null>(null);
-
-  // New Image Upload States
+  
+  // Image Upload States
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Comments States
-  const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
-  const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-
-  // Edit Post States
-  const [editingPostId, setEditingPostId] = useState<number | null>(null);
-  const [editContent, setEditContent] = useState('');
 
   // 1. Fetch CURRENT user
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
       if (!session?.user?.id) return null;
-      const { data } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, profile_photo_url')
-        .eq('auth_users_uuid', session.user.id)
-        .single();
+      const { data } = await supabase.from('users').select('id, first_name, last_name, profile_photo_url').eq('auth_users_uuid', session.user.id).single();
       return data;
     },
     enabled: !!session?.user?.id,
@@ -70,118 +39,56 @@ export function Feed() {
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['posts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          users:user_id (id, first_name, last_name, profile_photo_url, headline),
-          post_likes ( user_id ),
-          post_comments (
-            id, content_text, created_at,
-            users:user_id (id, first_name, last_name, profile_photo_url)
-          )
-        `)
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.from('posts').select(`*, users:user_id (id, first_name, last_name, profile_photo_url, headline), post_likes ( user_id ), post_comments (id, content_text, created_at, users:user_id (id, first_name, last_name, profile_photo_url))`).order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     }
   });
 
-  // Handle Image Selection
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        alert("Image must be less than 5MB");
-        return;
-      }
+      if (file.size > 5 * 1024 * 1024) return alert("Image must be less than 5MB");
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
     }
   };
 
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  const clearImage = () => { setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; };
 
-  // 3. Create post mutation (Now handles images!)
+  // 3. Create post mutation
   const createPost = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id) throw new Error("No user ID found");
-
       let imageUrl = null;
-
-      // Upload the image to Supabase Storage if one is selected
       if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${currentUser.id}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('post_images')
-          .upload(filePath, imageFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: publicUrlData } = supabase.storage
-          .from('post_images')
-          .getPublicUrl(filePath);
-
-        imageUrl = publicUrlData.publicUrl;
+        const filePath = `${currentUser.id}/${Math.random()}.${imageFile.name.split('.').pop()}`;
+        await supabase.storage.from('post_images').upload(filePath, imageFile);
+        const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
+        imageUrl = data.publicUrl;
       }
-
-      // Extract tags
       const rawTags = content.match(/#[a-zA-Z0-9_]+/g) || [];
       const extractedTags = rawTags.map(tag => tag.toLowerCase());
-
-      // Insert Post
-      const { data: newPost, error: postError } = await supabase
-        .from('posts')
-        .insert({
-          content: content.trim(),
-          hashtags: extractedTags,
-          user_id: currentUser.id,
-          image_url: imageUrl // Save the image link here
-        })
-        .select().single();
-
-      if (postError) throw postError;
-
-      // Insert Tags
+      const { data: newPost, error } = await supabase.from('posts').insert({ content: content.trim(), hashtags: extractedTags, user_id: currentUser.id, image_url: imageUrl }).select().single();
+      if (error) throw error;
       if (extractedTags.length > 0) {
         for (const tagName of extractedTags) {
           const { data: tagData } = await supabase.from('tags').upsert({ name: tagName }, { onConflict: 'name' }).select().single();
           if (tagData) await supabase.from('post_tags').insert({ post_id: newPost.id, tag_id: tagData.id });
         }
       }
-      return newPost;
     },
-    onSuccess: () => {
-      setContent('');
-      clearImage();
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-    }
+    onSuccess: () => { setContent(''); clearImage(); queryClient.invalidateQueries({ queryKey: ['posts'] }); }
   });
 
-  // 4. Delete post mutation (With image cleanup)
+  // 4. Delete post mutation
   const deletePost = useMutation({
     mutationFn: async (post: any) => {
-      // 1. Delete image from storage if it exists
       if (post.image_url) {
         const pathMatches = post.image_url.match(/post_images\/(.+)$/);
-        if (pathMatches && pathMatches[1]) {
-          const filePath = pathMatches[1];
-          const { error: storageError } = await supabase.storage.from('post_images').remove([filePath]);
-          if (storageError) console.error("Error deleting image file:", storageError);
-        }
+        if (pathMatches && pathMatches[1]) await supabase.storage.from('post_images').remove([pathMatches[1]]);
       }
-
-      // 2. Delete post from DB
-      const { error } = await supabase.from('posts').delete().eq('id', post.id);
-      if (error) throw error;
+      await supabase.from('posts').delete().eq('id', post.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts'] })
   });
@@ -190,11 +97,8 @@ export function Feed() {
   const toggleLike = useMutation({
     mutationFn: async ({ postId, hasLiked }: { postId: number; hasLiked: boolean }) => {
       if (!currentUser?.id) return;
-      if (hasLiked) {
-        await supabase.from('post_likes').delete().match({ post_id: postId, user_id: currentUser.id });
-      } else {
-        await supabase.from('post_likes').insert({ post_id: postId, user_id: currentUser.id });
-      }
+      if (hasLiked) await supabase.from('post_likes').delete().match({ post_id: postId, user_id: currentUser.id });
+      else await supabase.from('post_likes').insert({ post_id: postId, user_id: currentUser.id });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts'] })
   });
@@ -205,11 +109,7 @@ export function Feed() {
       if (!currentUser?.id) return;
       await supabase.from('post_comments').insert({ post_id: postId, user_id: currentUser.id, content_text: text.trim() });
     },
-    onSuccess: (_, variables) => {
-      setCommentInputs(prev => ({ ...prev, [variables.postId]: '' }));
-      setExpandedComments(prev => ({ ...prev, [variables.postId]: true }));
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-    }
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts'] })
   });
 
   // 7. Update Post Mutation
@@ -217,21 +117,9 @@ export function Feed() {
     mutationFn: async ({ postId, newContent }: { postId: number; newContent: string }) => {
       const rawTags = newContent.match(/#[a-zA-Z0-9_]+/g) || [];
       const extractedTags = rawTags.map(tag => tag.toLowerCase());
-
-      const { error } = await supabase
-        .from('posts')
-        .update({
-          content: newContent.trim(),
-          hashtags: extractedTags
-        })
-        .eq('id', postId);
-
-      if (error) throw error;
+      await supabase.from('posts').update({ content: newContent.trim(), hashtags: extractedTags }).eq('id', postId);
     },
-    onSuccess: () => {
-      setEditingPostId(null); // Close the edit box
-      queryClient.invalidateQueries({ queryKey: ['posts'] }); // Refresh the feed
-    }
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts'] })
   });
 
   return (
@@ -253,20 +141,14 @@ export function Feed() {
               </Link>
               <div className="flex-1">
                 <Textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  value={content} onChange={(e) => setContent(e.target.value)}
                   placeholder="What's new, Falcons? #Swim #Jobs #Montevallo"
                   className="min-h-[60px] resize-none border-none focus-visible:ring-0 px-0 text-lg placeholder:text-muted-foreground bg-transparent"
                 />
-
-                {/* Image Preview Area */}
                 {imagePreview && (
                   <div className="relative mt-3 inline-block">
                     <img src={imagePreview} alt="Preview" className="max-h-64 rounded-lg object-cover border border-border" />
-                    <Button
-                      variant="destructive" size="icon" className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-md"
-                      onClick={clearImage}
-                    >
+                    <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-md" onClick={clearImage}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -277,29 +159,12 @@ export function Feed() {
           <Separator />
           <CardFooter className="pt-3 pb-3 flex justify-between items-center bg-card rounded-b-xl">
             <div className="flex gap-1">
-              {/* Hidden File Input */}
-              <input
-                type="file"
-                accept="image/png, image/jpeg, image/jpg, image/webp"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={handleImageSelect}
-              />
-
-              {/* Photo Button */}
-              <Button
-                variant="ghost" size="sm" className="text-muted-foreground rounded-full"
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageSelect} />
+              <Button variant="ghost" size="sm" className="text-muted-foreground rounded-full" onClick={() => fileInputRef.current?.click()}>
                 <ImageIcon className="h-5 w-5 mr-2" />Photo
               </Button>
             </div>
-
-            <Button
-              onClick={() => createPost.mutate()}
-              disabled={!session || createPost.isPending || (!content.trim() && !imageFile)}
-              className="rounded-full px-6 font-semibold"
-            >
+            <Button onClick={() => createPost.mutate()} disabled={!session || createPost.isPending || (!content.trim() && !imageFile)} className="rounded-full px-6 font-semibold">
               {createPost.isPending ? 'Posting...' : 'Post'}
             </Button>
           </CardFooter>
@@ -308,216 +173,26 @@ export function Feed() {
         {/* Posts Feed */}
         <div className="space-y-4">
           {isLoading && <div className="text-center py-8 text-muted-foreground">Loading posts...</div>}
-
           {posts.length === 0 && !isLoading && (
             <div className="text-center py-12 text-muted-foreground bg-card rounded-xl border border-border shadow-sm">
               No posts yet. Be the first to share something!
             </div>
           )}
 
-          {posts.map((post: any) => {
-            const user = post.users;
-            const postDate = new Date(post.created_at).toLocaleString('en-US', {
-              month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
-            });
-
-            return (
-              <Card key={post.id} className="shadow-sm border-0 overflow-hidden">
-                <CardHeader className="pb-3 pt-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Link to={`/profile/${user?.id}`} className="cursor-pointer hover:opacity-80 transition-opacity shrink-0">
-                        <Avatar className="w-12 h-12">
-                          <AvatarImage src={user?.profile_photo_url} className="object-cover" />
-                          <AvatarFallback className="bg-primary text-primary-foreground">
-                            {user ? `${user.first_name[0]}${user.last_name[0]}` : "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                      </Link>
-
-                      <Link to={`/profile/${user?.id}`} className="hover:underline cursor-pointer">
-                        <h3 className="font-semibold text-base text-foreground leading-none">
-                          {user?.first_name} {user?.last_name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                          {user?.headline || 'Student at University of Montevallo'}
-                        </p>
-                      </Link>
-
-                      <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">• {postDate}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground sm:hidden">{new Date(post.created_at).toLocaleDateString()}</span>
-                      {currentUser?.id == post.user_id && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
-                            <MoreHorizontal className="h-5 w-5" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40 z-50 bg-popover text-popover-foreground border shadow-md">
-                            <DropdownMenuItem
-                              className="cursor-pointer flex items-center p-2 outline-none"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingPostId(post.id);
-                                setEditContent(post.content || '');
-                              }}
-                            >
-                              <Pencil className="mr-2 h-4 w-4" />
-                              <span>Edit Post</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
-                              onClick={(e) => { e.stopPropagation(); setPostToDelete(post); }}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /><span>Delete Post</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-1 pb-4">
-                  {/* EDIT MODE VS VIEW MODE */}
-                  {editingPostId === post.id ? (
-                    <div className="space-y-3 mb-3 mt-2">
-                      <Textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        className="min-h-[100px] resize-none focus-visible:ring-1"
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setEditingPostId(null)}>
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => updatePost.mutate({ postId: post.id, newContent: editContent })}
-                          disabled={updatePost.isPending || !editContent.trim()}
-                        >
-                          {updatePost.isPending ? 'Saving...' : 'Save Changes'}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    post.content && (
-                      <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3">
-                        {post.content}
-                      </p>
-                    )
-                  )}
-                  {/* Render the uploaded image in the feed without cropping */}
-                  {post.image_url && (
-                    <div className="mt-3 aspect-auto overflow-hidden rounded-xl border border-border">
-                      <img
-                        src={post.image_url}
-                        alt="Post attachment"
-                        className="w-full h-auto max-h-[500px] object-contain" // <--- Change object-cover to object-contain
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-
-                  {post.hashtags?.length > 0 && (
-                    <div className="flex gap-2 mt-4 flex-wrap">
-                      {post.hashtags.map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="cursor-pointer hover:bg-secondary/80 text-blue-600 bg-blue-50 border-0">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-
-                <Separator />
-
-                <CardFooter className="py-2 px-2 flex gap-1 bg-card">
-                  {(() => {
-                    const likeCount = post.post_likes?.length || 0;
-                    const hasLiked = post.post_likes?.some((like: any) => like.user_id === currentUser?.id);
-                    const isLiking = toggleLike.isPending && toggleLike.variables?.postId === post.id;
-                    return (
-                      <Button
-                        variant="ghost" size="sm" onClick={() => toggleLike.mutate({ postId: post.id, hasLiked })} disabled={isLiking}
-                        className={`flex-1 sm:flex-none transition-colors ${hasLiked ? 'text-blue-600 font-semibold hover:text-blue-700 hover:bg-blue-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                      >
-                        <ThumbsUp className={`h-4 w-4 mr-2 ${hasLiked ? 'fill-current' : ''} ${isLiking ? 'animate-pulse' : ''}`} />
-                        {likeCount > 0 ? likeCount : 'Like'}
-                      </Button>
-                    );
-                  })()}
-
-                  <Button
-                    variant="ghost" size="sm" onClick={() => setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
-                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    {post.post_comments?.length > 0 ? post.post_comments.length : 'Comment'}
-                  </Button>
-                </CardFooter>
-
-                {/* Comments Section */}
-                {expandedComments[post.id] && (
-                  <div className="px-4 pb-4 pt-2 bg-muted/20 border-t border-border">
-                    <div className="space-y-4 mb-4 mt-2">
-                      {post.post_comments?.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-2">No comments yet. Be the first to reply!</p>
-                      ) : (
-                        post.post_comments?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((comment: any) => (
-                          <div key={comment.id} className="flex gap-3">
-                            <Avatar className="w-8 h-8 shrink-0">
-                              <AvatarImage src={comment.users?.profile_photo_url} className="object-cover" />
-                              <AvatarFallback className="text-xs bg-primary text-primary-foreground">{comment.users?.first_name?.[0]}{comment.users?.last_name?.[0]}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 bg-background border shadow-sm rounded-lg p-3 text-sm">
-                              <div className="font-semibold text-foreground mb-1">
-                                {comment.users?.first_name} {comment.users?.last_name}
-                                <span className="text-xs text-muted-foreground font-normal ml-2">{new Date(comment.created_at).toLocaleDateString()}</span>
-                              </div>
-                              <p className="text-foreground whitespace-pre-wrap">{comment.content_text}</p>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 items-center">
-                      <Avatar className="w-8 h-8 shrink-0 hidden sm:block">
-                        <AvatarImage src={currentUser?.profile_photo_url} className="object-cover" />
-                        <AvatarFallback className="text-xs bg-primary text-primary-foreground">{currentUser?.first_name?.[0]}{currentUser?.last_name?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <Input
-                        value={commentInputs[post.id] || ''} onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                        placeholder="Write a comment..." className="flex-1 bg-background"
-                        onKeyDown={(e) => { if (e.key === 'Enter' && commentInputs[post.id]?.trim()) createComment.mutate({ postId: post.id, text: commentInputs[post.id] }); }}
-                      />
-                      <Button size="icon" className="shrink-0 rounded-full" disabled={!commentInputs[post.id]?.trim() || createComment.isPending}
-                        onClick={() => createComment.mutate({ postId: post.id, text: commentInputs[post.id] })}>
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
+          {posts.map((post: any) => (
+            <PostCard 
+              key={post.id}
+              post={post}
+              currentUser={currentUser}
+              onUpdate={(postId, content) => updatePost.mutate({ postId, newContent: content })}
+              onDelete={(postObj) => deletePost.mutate(postObj)}
+              isUpdating={updatePost.isPending}
+              onToggleLike={(postId, hasLiked) => toggleLike.mutate({ postId, hasLiked })}
+              onCreateComment={(postId, text) => createComment.mutate({ postId, text })}
+            />
+          ))}
         </div>
       </div>
-
-      <AlertDialog open={postToDelete !== null} onOpenChange={(isOpen) => !isOpen && setPostToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. This will permanently delete your post.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (postToDelete) { deletePost.mutate(postToDelete); setPostToDelete(null); } }}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
