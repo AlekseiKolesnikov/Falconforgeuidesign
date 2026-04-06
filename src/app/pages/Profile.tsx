@@ -21,8 +21,9 @@ import 'react-easy-crop/react-easy-crop.css';
 import { PostCard } from "../components/PostCard";
 import { ProfileExperience } from "../components/profile/ProfileExperience";
 import { ProfileEducation } from "../components/profile/ProfileEducation";
+import { ProfileAbout } from "../components/profile/ProfileAbout";
+import { ProfileHeader } from "../components/profile/ProfileHeader";
 
-// --- INTERFACES ---
 interface ProfileData {
   id: number;
   first_name: string;
@@ -67,31 +68,27 @@ export function Profile() {
   const queryClient = useQueryClient();
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  // --- STATE ---
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [education, setEducation] = useState<any[]>([]);
   const [experiences, setExperiences] = useState<any[]>([]);
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modals State
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [editForm, setEditForm] = useState({ first_name: "", last_name: "", headline: "", bio: "", major: "", location: "" });
+  const [newSkillName, setNewSkillName] = useState("");
 
-  // Image Cropper State
   const [isPositionImageOpen, setIsPositionImageOpen] = useState(false);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
-  // Create Post State
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostImage, setNewPostImage] = useState<File | null>(null);
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
 
-  // --- QUERIES ---
   const fetchProfile = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -103,12 +100,14 @@ export function Profile() {
         setProfile(userData);
         const { data: eduData } = await supabase.from("education").select("*").eq("user_id", userData.id);
         const { data: expData } = await supabase.from("experiences").select("*").eq("user_id", userData.id).order("end_date", { ascending: false });
-        const { data: skillsData } = await supabase.from("user_skills").select("proficiency_level, skills(name)").eq("user_id", userData.id);
+        
+        // Notice we are grabbing 'id' here so we can delete the skill later!
+        const { data: skillsData } = await supabase.from("user_skills").select("id, proficiency_level, skills(name)").eq("user_id", userData.id);
 
         setEducation(eduData || []);
         setExperiences(expData || []);
         // @ts-ignore
-        setSkills(skillsData?.map(s => ({ name: s.skills?.name, level: s.proficiency_level })) || []);
+        setSkills(skillsData?.map(s => ({ id: s.id, name: s.skills?.name, level: s.proficiency_level })) || []);
       }
     } finally {
       setLoading(false);
@@ -127,7 +126,6 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
-  // --- MUTATIONS & HANDLERS ---
   const updateProfileMutation = useMutation({
     mutationFn: async (formData: typeof editForm) => { await supabase.from('users').update(formData).eq('id', profile?.id); },
     onSuccess: () => { setIsEditProfileOpen(false); fetchProfile(); }
@@ -174,19 +172,6 @@ export function Profile() {
     onSuccess: () => { setIsPositionImageOpen(false); fetchProfile(); }
   });
 
-  const deleteBanner = async () => {
-    if (!profile?.id) return;
-    await supabase.from('users').update({ banner_url: null }).eq('id', profile.id);
-    fetchProfile();
-  };
-
-  const openEditProfile = () => {
-    if (profile) {
-      setEditForm({ first_name: profile.first_name || "", last_name: profile.last_name || "", headline: profile.headline || "", bio: profile.bio || "", major: profile.major || "", location: profile.location || "" });
-      setIsEditProfileOpen(true);
-    }
-  };
-
   const handlePostImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -200,7 +185,6 @@ export function Profile() {
   const createPostMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id || !newPostContent.trim()) return;
-
       let imageUrl = null;
       if (newPostImage) {
         const filePath = `${profile.id}/post_${Math.random()}.${newPostImage.name.split('.').pop()}`;
@@ -208,16 +192,12 @@ export function Profile() {
         const { data } = supabase.storage.from('post_images').getPublicUrl(filePath);
         imageUrl = data.publicUrl;
       }
-
       const rawTags = newPostContent.match(/#[a-zA-Z0-9_]+/g) || [];
       const extractedTags = rawTags.map(tag => tag.toLowerCase());
-
       const { data: newPost, error } = await supabase.from('posts').insert({
         user_id: profile.id, content: newPostContent.trim(), image_url: imageUrl, hashtags: extractedTags
       }).select().single();
-
       if (error) throw error;
-
       if (extractedTags.length > 0 && newPost) {
         for (const tagName of extractedTags) {
           const { data: tagData } = await supabase.from('tags').upsert({ name: tagName }, { onConflict: 'name' }).select().single();
@@ -245,6 +225,32 @@ export function Profile() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] })
   });
 
+  // --- SKILL MUTATIONS ---
+  const addSkillMutation = useMutation({
+    mutationFn: async (skillName: string) => {
+      if (!profile?.id || !skillName.trim()) return;
+      const { data: skillData } = await supabase.from('skills').upsert({ name: skillName.trim() }, { onConflict: 'name' }).select().single();
+      if (skillData) {
+        await supabase.from('user_skills').insert({ user_id: profile.id, skill_id: skillData.id, proficiency_level: 'Intermediate' });
+      }
+    },
+    onSuccess: () => { setNewSkillName(""); fetchProfile(); }
+  });
+
+  const removeSkillMutation = useMutation({
+    mutationFn: async (userSkillId: number) => {
+      await supabase.from('user_skills').delete().eq('id', userSkillId);
+    },
+    onSuccess: () => fetchProfile()
+  });
+
+  const openEditProfile = () => {
+    if (profile) {
+      setEditForm({ first_name: profile.first_name || "", last_name: profile.last_name || "", headline: profile.headline || "", bio: profile.bio || "", major: profile.major || "", location: profile.location || "" });
+      setIsEditProfileOpen(true);
+    }
+  };
+
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
 
@@ -253,98 +259,42 @@ export function Profile() {
       <Navigation />
 
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* 1. HEADER CARD */}
-        <Card className="overflow-hidden shadow-sm border-0">
-          <div className="h-64 relative bg-muted">
-            <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-            <div className="absolute top-4 right-4 flex gap-2 z-10">
-              <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
-                <Camera className="h-4 w-4" />
-                <input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} />
-              </label>
-              {profile.banner_url && (
-                <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={deleteBanner}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
+        
+        {/* 1. HEADER */}
+        <ProfileHeader 
+          profile={profile}
+          onEditProfile={openEditProfile}
+          onAvatarClick={() => { setCropImage(profile.profile_photo_url || null); setZoom(1); setCrop({ x: 0, y: 0 }); setIsPositionImageOpen(true); }}
+          onBannerUpload={handleBannerUpload}
+          onBannerDelete={() => { if(confirm('Delete banner?')) supabase.from('users').update({ banner_url: null }).eq('id', profile.id).then(() => fetchProfile()) }}
+        />
 
-          <CardContent className="relative pt-0 pb-6 bg-card">
-            <div className="flex justify-between items-start">
-              <div className="-mt-20 relative z-10 w-fit">
-                <Avatar className="h-40 w-40 border-4 border-card shadow-xl bg-muted">
-                  <AvatarImage src={profile.profile_photo_url} className="object-cover" />
-                  <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
-                </Avatar>
-                {profile.profile_photo_url ? (
-                  <Button size="icon" variant="secondary" className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80" onClick={() => { setCropImage(profile.profile_photo_url || null); setZoom(1); setCrop({ x: 0, y: 0 }); setIsPositionImageOpen(true); }}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground absolute bottom-1 right-1 h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors z-10">
-                    <Camera className="h-4 w-4" />
-                    <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
-                  </label>
-                )}
-              </div>
-              <div className="pt-4 flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
-                <Button variant="secondary" className="gap-2 rounded-full" onClick={openEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
-              </div>
-            </div>
-            <div className="mt-4">
-              <h1 className="text-3xl font-bold text-foreground">
-                {profile.first_name} {profile.last_name}
-                {profile.is_verified && <span className="text-blue-500 ml-2 text-xl" title="Verified">✅</span>}
-              </h1>
-              <p className="text-lg text-foreground mt-1">{profile.headline || "Student at University of Montevallo"}</p>
-              <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{profile.location || "Montevallo, Alabama"}</span>
-                <span className="flex items-center gap-1.5"><Mail className="h-4 w-4" />{profile.email}</span>
-                {profile.swimmer && <span className="text-blue-600 font-medium">🏊 UM Swim Team</span>}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* 2. ABOUT & SKILLS */}
+        <ProfileAbout 
+          bio={profile.bio || ""}
+          skills={skills}
+          onEditProfile={openEditProfile}
+        />
 
-        {/* 2. ABOUT CARD */}
-        <Card className="shadow-sm border-0">
-          <CardHeader><CardTitle className="text-xl">About</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-foreground leading-relaxed whitespace-pre-wrap">{profile.bio || "No bio added yet."}</p>
-            {skills.length > 0 && (
-              <div className="mt-6">
-                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" /> Top Skills
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {skills.map((skill, i) => (
-                    <Badge key={i} variant="secondary" className="px-3 py-1 text-sm bg-muted hover:bg-muted/80">{skill.name}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 3. ACTIVITY CARD (CLEANED UP!) */}
+        {/* 3. ACTIVITY */}
         <Card className="shadow-sm border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-xl">Activity</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">{userPosts.length} posts</p>
             </div>
-            <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={() => setIsCreatePostOpen(true)}>Create a post</Button>
+            <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={() => setIsCreatePostOpen(true)}>
+              Create a post
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-4">
               {userPosts.map((post: any) => (
-                <PostCard
+                <PostCard 
                   key={post.id}
                   post={post}
-                  currentUser={profile}         // <-- Pass the profile here so it knows you are the owner!
-                  hideAuthor={true}             // <-- Turns off the Avatar and Name!
+                  currentUser={profile}
+                  hideAuthor={true}
                   onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
                   onDelete={(postId) => deletePostMutation.mutate(postId)}
                   isUpdating={updatePostMutation.isPending}
@@ -354,113 +304,150 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* 4. EXPERIENCE CARD */}
-        <ProfileExperience
+        {/* 4. EXPERIENCE */}
+        <ProfileExperience 
           experiences={experiences}
           userId={profile.id}
           onRefresh={fetchProfile}
         />
 
-        {/* 5. EDUCATION CARD */}
-        <ProfileEducation
+        {/* 5. EDUCATION */}
+        <ProfileEducation 
           education={education}
           userId={profile.id}
           onRefresh={fetchProfile}
         />
-
-        {/* ----------------- MODALS ----------------- */}
-
-        {/* MODAL: EDIT PROFILE */}
-        <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader><DialogTitle>Edit Profile Info</DialogTitle></DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} /></div>
-              </div>
-              <div className="space-y-2"><Label>Headline</Label><Input value={editForm.headline} onChange={(e) => setEditForm({ ...editForm, headline: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditProfileOpen(false)}>Cancel</Button>
-              <Button onClick={() => updateProfileMutation.mutate(editForm)} disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? "Saving..." : "Save Changes"}</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* MODAL: ADJUST IMAGE POSITION */}
-        <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
-          <DialogContent className="sm:max-w-[700px] h-fit max-h-[95vh] flex flex-col pt-10 px-10 pb-4 rounded-2xl">
-            <DialogHeader><DialogTitle>Adjust Image Position & Zoom</DialogTitle></DialogHeader>
-            <div className="flex-1 flex flex-col items-center justify-center p-4">
-              <p className="text-center text-muted-foreground leading-relaxed mb-6">Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.</p>
-              <div className="w-[400px] h-[400px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-6">
-                {cropImage && (
-                  <Cropper image={cropImage} crop={crop} zoom={zoom} aspect={1 / 1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)} />
-                )}
-              </div>
-              <div className="w-full max-w-sm mb-4">
-                <Slider defaultValue={[1]} max={3} min={1} step={0.1} value={[zoom]} onValueChange={(val) => setZoom(val[0])} className="w-full" />
-              </div>
-            </div>
-            <DialogFooter className="flex gap-3 justify-between items-center mt-2 p-2">
-              <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>Cancel</Button>
-              <div className="flex gap-3 justify-end items-center">
-                <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm whitespace-nowrap h-10 w-[140px] shrink-0 inline-flex items-center justify-center rounded-full font-semibold transition-colors">
-                  <Camera className="mr-2 h-4 w-4 shrink-0" /> Upload New
-                  <input type="file" className="hidden" accept="image/*" onChange={handleAvatarSelect} />
-                </label>
-                {profile.profile_photo_url && (
-                  <Button variant="destructive" className="h-10 w-[140px] rounded-full font-semibold shrink-0 gap-2" onClick={() => deleteImageMutation.mutate()} disabled={deleteImageMutation.isPending}>
-                    <Trash2 className="mr-2 h-4 w-4 shrink-0" />{deleteImageMutation.isPending ? "..." : "Delete"}
-                  </Button>
-                )}
-                <Button className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={async () => { if (cropImage && croppedAreaPixels) { const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels); saveCroppedImageMutation.mutate(croppedImageBlob); } }} disabled={saveCroppedImageMutation.isPending}>
-                  {saveCroppedImageMutation.isPending ? "Saving..." : "Save"}
-                </Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* MODAL: CREATE POST */}
-        <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
-          <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
-            <DialogHeader className="mb-4"><DialogTitle className="text-xl">Create a post</DialogTitle></DialogHeader>
-            <div className="flex gap-4 mb-4">
-              <Avatar className="h-12 w-12 border border-border">
-                <AvatarImage src={profile?.profile_photo_url} className="object-cover" />
-                <AvatarFallback>{profile?.first_name?.[0]}{profile?.last_name?.[0]}</AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col justify-center">
-                <span className="font-semibold text-foreground">{profile?.first_name} {profile?.last_name}</span>
-              </div>
-            </div>
-            <Textarea placeholder="What do you want to talk about?" className="min-h-[120px] resize-none text-lg border border-border rounded-xl focus-visible:ring-1 p-4 shadow-none mb-4" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} />
-            {newPostImagePreview && (
-              <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden mb-4 border">
-                <img src={newPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
-                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md" onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            <DialogFooter className="flex justify-between items-center sm:justify-between border-t pt-4 mt-auto">
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors p-2.5 rounded-full">
-                  <ImageIcon className="h-5 w-5" />
-                  <input type="file" className="hidden" accept="image/*" onChange={handlePostImageSelect} />
-                </label>
-              </div>
-              <Button className="rounded-full font-semibold px-6" disabled={!newPostContent.trim() || createPostMutation.isPending} onClick={() => createPostMutation.mutate()}>
-                {createPostMutation.isPending ? "Posting..." : "Post"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
+
+      {/* ----------------- MODALS ----------------- */}
+
+      {/* MODAL: EDIT PROFILE WITH SKILLS INCLUDED */}
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Profile Info</DialogTitle></DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} /></div>
+            </div>
+            <div className="space-y-2"><Label>Headline</Label><Input value={editForm.headline} onChange={(e) => setEditForm({ ...editForm, headline: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
+
+            {/* NEW SKILLS SECTION INSIDE EDIT PROFILE */}
+            <div className="space-y-2 pt-4 border-t">
+              <Label>Manage Skills</Label>
+              <div className="flex flex-wrap gap-2 mb-2 border rounded-md p-3 min-h-[50px] bg-muted/20">
+                {skills.map((skill) => (
+                  <Badge key={skill.id} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-sm bg-background border shadow-sm">
+                    {skill.name}
+                    <button 
+                      type="button" 
+                      onClick={() => removeSkillMutation.mutate(skill.id)} 
+                      className="hover:text-destructive text-muted-foreground ml-1 transition-colors"
+                      title="Remove Skill"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {skills.length === 0 && <span className="text-sm text-muted-foreground">No skills added yet.</span>}
+              </div>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Type a skill and press Add..." 
+                  value={newSkillName} 
+                  onChange={(e) => setNewSkillName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addSkillMutation.mutate(newSkillName);
+                    }
+                  }}
+                />
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => addSkillMutation.mutate(newSkillName)} 
+                  disabled={!newSkillName.trim() || addSkillMutation.isPending}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" className="rounded-full" onClick={() => setIsEditProfileOpen(false)}>Close</Button>
+            <Button className="rounded-full px-6" onClick={() => updateProfileMutation.mutate(editForm)} disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: ADJUST IMAGE POSITION */}
+      <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
+        <DialogContent className="sm:max-w-[700px] h-fit max-h-[95vh] flex flex-col pt-10 px-10 pb-4 rounded-2xl">
+          <DialogHeader><DialogTitle>Adjust Image Position & Zoom</DialogTitle></DialogHeader>
+          <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <p className="text-center text-muted-foreground leading-relaxed mb-6">Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.</p>
+            <div className="w-[400px] h-[400px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-6">
+              {cropImage && (
+                <Cropper image={cropImage} crop={crop} zoom={zoom} aspect={1 / 1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)} />
+              )}
+            </div>
+            <div className="w-full max-w-sm mb-4">
+              <Slider defaultValue={[1]} max={3} min={1} step={0.1} value={[zoom]} onValueChange={(val) => setZoom(val[0])} className="w-full" />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-3 justify-between items-center mt-2 p-2">
+            <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>Cancel</Button>
+            <div className="flex gap-3 justify-end items-center">
+              <Button variant="destructive" className="h-10 w-[140px] rounded-full font-semibold shrink-0 gap-2" onClick={() => deleteImageMutation.mutate()} disabled={deleteImageMutation.isPending}>
+                <Trash2 className="mr-2 h-4 w-4 shrink-0" />{deleteImageMutation.isPending ? "..." : "Delete"}
+              </Button>
+              <Button className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={async () => { if (cropImage && croppedAreaPixels) { const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels); saveCroppedImageMutation.mutate(croppedImageBlob); } }} disabled={saveCroppedImageMutation.isPending}>
+                {saveCroppedImageMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: CREATE POST */}
+      <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+        <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
+          <DialogHeader className="mb-4"><DialogTitle className="text-xl">Create a post</DialogTitle></DialogHeader>
+          <div className="flex gap-4 mb-4">
+            <Avatar className="h-12 w-12 border border-border">
+              <AvatarImage src={profile?.profile_photo_url} className="object-cover" />
+            </Avatar>
+            <div className="flex flex-col justify-center">
+              <span className="font-semibold text-foreground">{profile?.first_name} {profile?.last_name}</span>
+            </div>
+          </div>
+          <Textarea placeholder="What do you want to talk about?" className="min-h-[120px] resize-none text-lg border border-border rounded-xl focus-visible:ring-1 p-4 shadow-none mb-4" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} />
+          {newPostImagePreview && (
+            <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden mb-4 border">
+              <img src={newPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
+              <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md" onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <DialogFooter className="flex justify-between items-center sm:justify-between border-t pt-4 mt-auto">
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors p-2.5 rounded-full">
+                <ImageIcon className="h-5 w-5" />
+                <input type="file" className="hidden" accept="image/*" onChange={handlePostImageSelect} />
+              </label>
+            </div>
+            <Button className="rounded-full font-semibold px-6" disabled={!newPostContent.trim() || createPostMutation.isPending} onClick={() => createPostMutation.mutate()}>
+              {createPostMutation.isPending ? "Posting..." : "Post"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
