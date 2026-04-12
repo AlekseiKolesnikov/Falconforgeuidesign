@@ -3,7 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { Navigation } from "../components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { Avatar, AvatarImage } from "../components/ui/avatar";
+import { ProfileConnections } from "../components/profile/ProfileConnections";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
@@ -327,6 +328,9 @@ export function Profile() {
           isOwner={isOwner}
           onEditProfile={openEditProfile}
         />
+
+        {/* NEW: CONNECTIONS SECTION */}
+        <ProfileConnections userId={profile.id} />
 
         {/* 3. ACTIVITY */}
         <Card className="shadow-sm border-0">
