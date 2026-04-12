@@ -88,38 +88,27 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               )}
             </div>
 
-            {/* ACTION BUTTONS & CONNECTIONS LINK WRAPPER */}
-            <div className="pt-4 flex flex-col items-end gap-1.5">
-              <div className="flex gap-2">
-                {/* SHOW CONNECT IF VIEWING SOMEONE ELSE */}
-                {!isOwner && (
-                  <Button
-                    variant={isFollowing ? "secondary" : "outline"}
-                    className="gap-2 rounded-full px-6"
-                    onClick={onToggleConnect}
-                  >
-                    <Users className="h-4 w-4" />
-                    {isFollowing ? "Connected" : "Connect"}
-                  </Button>
-                )}
+            {/* ACTION BUTTONS (Moved connections link out of here) */}
+            <div className="pt-4 flex gap-2">
+              {/* SHOW CONNECT IF VIEWING SOMEONE ELSE */}
+              {!isOwner && (
+                <Button
+                  variant={isFollowing ? "secondary" : "outline"}
+                  className="gap-2 rounded-full px-6"
+                  onClick={onToggleConnect}
+                >
+                  <Users className="h-4 w-4" />
+                  {isFollowing ? "Connected" : "Connect"}
+                </Button>
+              )}
 
-                {/* SHOW EDIT PROFILE IF VIEWING YOURSELF */}
-                {isOwner && (
-                  <Button variant="secondary" className="gap-2 rounded-full px-6" onClick={onEditProfile}>
-                    <Edit className="h-4 w-4" />Edit Profile
-                  </Button>
-                )}
-              </div>
-              
-              {/* CLICKABLE CONNECTIONS TEXT */}
-              <button 
-                onClick={() => setIsConnectionsOpen(true)}
-                className="text-sm font-semibold text-primary hover:text-primary/80 hover:underline transition-colors px-2"
-              >
-                {connections.length} Connection{connections.length !== 1 ? 's' : ''}
-              </button>
+              {/* SHOW EDIT PROFILE IF VIEWING YOURSELF */}
+              {isOwner && (
+                <Button variant="secondary" className="gap-2 rounded-full px-6" onClick={onEditProfile}>
+                  <Edit className="h-4 w-4" />Edit Profile
+                </Button>
+              )}
             </div>
-
           </div>
 
           <div className="mt-2">
@@ -127,7 +116,22 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               {profile.first_name} {profile.last_name}
               {profile.is_verified && <span className="text-blue-500 ml-2 text-xl" title="Verified">✅</span>}
             </h1>
-            <p className="text-lg text-foreground mt-1">{profile.headline || "Student at University of Montevallo"}</p>
+            
+            {/* NEW LAYOUT: Headline and Connections on the exact same row */}
+            <div className="flex justify-between items-center mt-1 gap-4">
+              <p className="text-lg text-foreground">
+                {profile.headline || "Student at University of Montevallo"}
+              </p>
+              
+              {/* CLICKABLE CONNECTIONS TEXT (Now exactly 1px larger using text-[15px]) */}
+              <button 
+                onClick={() => setIsConnectionsOpen(true)}
+                className="text-[15px] font-semibold text-primary hover:text-primary/80 hover:underline transition-colors shrink-0"
+              >
+                {connections.length} Connection{connections.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+
             <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{profile.location || "Montevallo, Alabama"}</span>
               <span className="flex items-center gap-1.5"><Mail className="h-4 w-4" />{profile.email}</span>
@@ -158,7 +162,7 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
                   <Link 
                     key={user.id} 
                     to={`/profile/${user.id}`} 
-                    onClick={() => setIsConnectionsOpen(false)} // Closes modal when navigating to a new profile
+                    onClick={() => setIsConnectionsOpen(false)} // Closes modal when navigating
                     className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors"
                   >
                     <Avatar className="h-10 w-10 border">
