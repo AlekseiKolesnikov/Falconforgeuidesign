@@ -55,9 +55,8 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
             )}
           </div>
 
-          <div className="mt-6 flex gap-3 justify-center">
-
-            {/* UPDATED CONNECT BUTTON */}
+          <div className="pt-4 flex gap-2">
+            {/* SHOW CONNECT IF VIEWING SOMEONE ELSE */}
             {!isOwner && (
               <Button
                 variant={isFollowing ? "secondary" : "outline"}

@@ -14,7 +14,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
 import { X, Image as ImageIcon, Trash2 } from "lucide-react";
 import Cropper from 'react-easy-crop';
-import { useParams } from "react-router-dom"; // <-- ADDED FOR DYNAMIC ROUTING
+import { useParams } from "react-router-dom"; 
 
 // IMPORT YOUR CLEAN COMPONENTS
 import { PostCard } from "../components/PostCard";
@@ -67,12 +67,11 @@ export function Profile() {
   const queryClient = useQueryClient();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   
-  // <-- URL PARAMETER GRABBER -->
   const { id } = useParams<{ id: string }>(); 
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null); // Keeps track of who is logged in
-  const [isOwner, setIsOwner] = useState(false); // Controls the edit buttons
+  const [currentUser, setCurrentUser] = useState<any>(null); 
+  const [isOwner, setIsOwner] = useState(false); 
 
   const [education, setEducation] = useState<any[]>([]);
   const [experiences, setExperiences] = useState<any[]>([]);
@@ -97,7 +96,6 @@ export function Profile() {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      // 1. Find out who is currently logged in
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
@@ -109,16 +107,13 @@ export function Profile() {
       
       setCurrentUser(loggedInUser);
 
-      // 2. Determine whose profile we are looking at (URL check)
-      let targetProfileId = loggedInUser?.id; // Default to 'me'
+      let targetProfileId = loggedInUser?.id; 
       if (id && id !== "me") {
         targetProfileId = parseInt(id);
       }
 
-      // 3. Are we looking at our own profile?
       setIsOwner(loggedInUser?.id === targetProfileId);
 
-      // 4. Fetch the target profile's data
       if (targetProfileId) {
         const { data: userData } = await supabase.from("users").select("*").eq("id", targetProfileId).single();
 
@@ -139,7 +134,6 @@ export function Profile() {
     }
   };
 
-  // Re-run the fetch whenever the URL changes
   useEffect(() => { fetchProfile(); }, [id]);
 
   const { data: userPosts = [] } = useQuery({
@@ -150,6 +144,34 @@ export function Profile() {
       return data || [];
     },
     enabled: !!profile?.id,
+  });
+
+  // --- CONNECTION QUERY & MUTATION ---
+  const { data: isFollowing = false } = useQuery({
+    queryKey: ['isFollowing', currentUser?.id, profile?.id],
+    queryFn: async () => {
+      if (!currentUser?.id || !profile?.id) return false;
+      const { data } = await supabase
+        .from('follows')
+        .select('*')
+        .eq('follower_id', currentUser.id)
+        .eq('followed_id', profile.id)
+        .maybeSingle(); 
+      return !!data;
+    },
+    enabled: !!currentUser?.id && !!profile?.id && !isOwner, 
+  });
+
+  const toggleConnectMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser?.id || !profile?.id) return;
+      if (isFollowing) {
+        await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('followed_id', profile.id);
+      } else {
+        await supabase.from('follows').insert({ follower_id: currentUser.id, followed_id: profile.id });
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['isFollowing', currentUser?.id, profile?.id] })
   });
 
   const updateProfileMutation = useMutation({
@@ -280,47 +302,6 @@ export function Profile() {
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
 
-// CHECK IF ALREADY CONNECTED
-  const { data: isFollowing = false } = useQuery({
-    queryKey: ['isFollowing', currentUser?.id, profile?.id],
-    queryFn: async () => {
-      if (!currentUser?.id || !profile?.id) return false;
-      const { data } = await supabase
-        .from('follows')
-        .select('*')
-        .eq('follower_id', currentUser.id)
-        .eq('followed_id', profile.id)
-        .maybeSingle(); // maybeSingle doesn't throw an error if no record is found
-      return !!data;
-    },
-    enabled: !!currentUser?.id && !!profile?.id && !isOwner, // Only run if looking at someone else
-  });
-
-  // TOGGLE CONNECTION MUTATION
-  const toggleConnectMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentUser?.id || !profile?.id) return;
-      
-      if (isFollowing) {
-        // Disconnect
-        await supabase.from('follows').delete()
-          .eq('follower_id', currentUser.id)
-          .eq('followed_id', profile.id);
-      } else {
-        // Connect
-        await supabase.from('follows').insert({
-          follower_id: currentUser.id,
-          followed_id: profile.id
-        });
-      }
-    },
-    onSuccess: () => {
-      // Refresh the button state instantly
-      queryClient.invalidateQueries({ queryKey: ['isFollowing', currentUser?.id, profile?.id] });
-    }
-  });
-
-
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
@@ -330,8 +311,8 @@ export function Profile() {
         {/* 1. HEADER */}
         <ProfileHeader 
           profile={profile}
-          isOwner={isOwner} // <-- PASS isOwner DOWN
-          isFollowing={isFollowing} // <-- ADD THIS
+          isOwner={isOwner}
+          isFollowing={isFollowing}
           onToggleConnect={() => toggleConnectMutation.mutate()}
           onEditProfile={openEditProfile}
           onAvatarClick={() => { setCropImage(profile.profile_photo_url || null); setZoom(1); setCrop({ x: 0, y: 0 }); setIsPositionImageOpen(true); }}
@@ -343,7 +324,7 @@ export function Profile() {
         <ProfileAbout 
           bio={profile.bio || ""}
           skills={skills}
-          isOwner={isOwner} // <-- PASS isOwner DOWN
+          isOwner={isOwner}
           onEditProfile={openEditProfile}
         />
 
@@ -354,7 +335,6 @@ export function Profile() {
               <CardTitle className="text-xl">Activity</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">{userPosts.length} posts</p>
             </div>
-            {/* ONLY OWNER CAN CREATE POST FROM HERE */}
             {isOwner && (
               <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={() => setIsCreatePostOpen(true)}>
                 Create a post
@@ -367,7 +347,7 @@ export function Profile() {
                 <PostCard 
                   key={post.id}
                   post={post}
-                  currentUser={currentUser} // <-- IMPORTANT: Pass the LOGGED IN user so edit/delete options work correctly
+                  currentUser={currentUser} 
                   hideAuthor={true}
                   onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
                   onDelete={(postId) => deletePostMutation.mutate(postId)}
@@ -382,7 +362,7 @@ export function Profile() {
         <ProfileExperience 
           experiences={experiences}
           userId={profile.id}
-          isOwner={isOwner} // <-- PASS isOwner DOWN
+          isOwner={isOwner}
           onRefresh={fetchProfile}
         />
 
@@ -390,7 +370,7 @@ export function Profile() {
         <ProfileEducation 
           education={education}
           userId={profile.id}
-          isOwner={isOwner} // <-- PASS isOwner DOWN
+          isOwner={isOwner}
           onRefresh={fetchProfile}
         />
       </div>
