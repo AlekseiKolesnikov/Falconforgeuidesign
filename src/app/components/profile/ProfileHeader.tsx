@@ -12,24 +12,29 @@ interface ProfileHeaderProps {
   onAvatarClick: () => void;
   onBannerUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBannerDelete: () => void;
+  isOwner: boolean; // Ensures we know if the viewer is the owner
 }
 
-export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner }: ProfileHeaderProps) {
   return (
     <Card className="overflow-hidden shadow-sm border-0">
       <div className="h-64 relative bg-muted">
         <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
-          <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
-            <Camera className="h-4 w-4" />
-            <input type="file" className="hidden" accept="image/*" onChange={onBannerUpload} />
-          </label>
-          {profile.banner_url && (
-            <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={onBannerDelete}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        
+        {/* ONLY SHOW BANNER EDIT BUTTONS IF OWNER */}
+        {isOwner && (
+          <div className="absolute top-4 right-4 flex gap-2 z-10">
+            <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
+              <Camera className="h-4 w-4" />
+              <input type="file" className="hidden" accept="image/*" onChange={onBannerUpload} />
+            </label>
+            {profile.banner_url && (
+              <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-md" onClick={onBannerDelete}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <CardContent className="relative pt-0 pb-6 bg-card">
@@ -39,15 +44,27 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               <AvatarImage src={profile.profile_photo_url} className="object-cover" />
               <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
             </Avatar>
-            <Button size="icon" variant="secondary" className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80" onClick={onAvatarClick}>
-              <Pencil className="h-4 w-4" />
-            </Button>
+            
+            {/* ONLY SHOW AVATAR EDIT BUTTON IF OWNER */}
+            {isOwner && (
+              <Button size="icon" variant="secondary" className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80" onClick={onAvatarClick}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
           </div>
+          
           <div className="pt-4 flex gap-2">
-            <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
-            <Button variant="secondary" className="gap-2 rounded-full" onClick={onEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
+            {/* SHOW CONNECT IF VIEWING SOMEONE ELSE */}
+            {!isOwner && (
+              <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
+            )}
+            {/* SHOW EDIT PROFILE IF VIEWING YOURSELF */}
+            {isOwner && (
+              <Button variant="secondary" className="gap-2 rounded-full" onClick={onEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
+            )}
           </div>
         </div>
+        
         <div className="mt-4">
           <h1 className="text-3xl font-bold text-foreground">
             {profile.first_name} {profile.last_name}

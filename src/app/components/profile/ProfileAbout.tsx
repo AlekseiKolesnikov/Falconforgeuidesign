@@ -8,16 +8,20 @@ interface ProfileAboutProps {
   bio: string;
   skills: any[];
   onEditProfile: () => void;
+  isOwner: boolean;
 }
 
-export function ProfileAbout({ bio, skills, onEditProfile }: ProfileAboutProps) {
+// FIXED: Added isOwner right here in the curly braces!
+export function ProfileAbout({ bio, skills, onEditProfile, isOwner }: ProfileAboutProps) {
   return (
     <Card className="shadow-sm border-0">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-xl">About</CardTitle>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEditProfile}>
-          <Pencil className="h-4 w-4 text-muted-foreground" />
-        </Button>
+        {isOwner && (
+          <Button variant="ghost" size="icon" onClick={onEditProfile}>
+            <Pencil className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <p className="text-foreground leading-relaxed whitespace-pre-wrap">{bio || "No bio added yet."}</p>
@@ -26,7 +30,7 @@ export function ProfileAbout({ bio, skills, onEditProfile }: ProfileAboutProps) 
           <h3 className="font-semibold text-foreground text-lg mb-4">
             Top Skills
           </h3>
-          
+
           {skills.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {skills.map((skill, i) => (

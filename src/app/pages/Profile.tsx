@@ -2,7 +2,7 @@ import * as React from "react";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { Navigation } from "../components/Navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -12,12 +12,11 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
-import {
-  MapPin, Mail, Briefcase, GraduationCap, Pencil,
-  TrendingUp, Users, Edit, Camera, Trash2, X, Image as ImageIcon
-} from "lucide-react";
+import { X, Image as ImageIcon, Trash2 } from "lucide-react";
 import Cropper from 'react-easy-crop';
-import 'react-easy-crop/react-easy-crop.css';
+import { useParams } from "react-router-dom"; // <-- ADDED FOR DYNAMIC ROUTING
+
+// IMPORT YOUR CLEAN COMPONENTS
 import { PostCard } from "../components/PostCard";
 import { ProfileExperience } from "../components/profile/ProfileExperience";
 import { ProfileEducation } from "../components/profile/ProfileEducation";
@@ -67,8 +66,14 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob> =>
 export function Profile() {
   const queryClient = useQueryClient();
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  
+  // <-- URL PARAMETER GRABBER -->
+  const { id } = useParams<{ id: string }>(); 
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null); // Keeps track of who is logged in
+  const [isOwner, setIsOwner] = useState(false); // Controls the edit buttons
+
   const [education, setEducation] = useState<any[]>([]);
   const [experiences, setExperiences] = useState<any[]>([]);
   const [skills, setSkills] = useState<any[]>([]);
@@ -90,31 +95,52 @@ export function Profile() {
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
 
   const fetchProfile = async () => {
+    setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // 1. Find out who is currently logged in
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
 
-      const { data: userData } = await supabase.from("users").select("*").eq("auth_users_uuid", user.id).single();
+      const { data: loggedInUser } = await supabase
+        .from("users")
+        .select("id, profile_photo_url, first_name, last_name")
+        .eq("auth_users_uuid", authUser.id)
+        .single();
+      
+      setCurrentUser(loggedInUser);
 
-      if (userData) {
-        setProfile(userData);
-        const { data: eduData } = await supabase.from("education").select("*").eq("user_id", userData.id);
-        const { data: expData } = await supabase.from("experiences").select("*").eq("user_id", userData.id).order("end_date", { ascending: false });
-        
-        // Notice we are grabbing 'id' here so we can delete the skill later!
-        const { data: skillsData } = await supabase.from("user_skills").select("id, proficiency_level, skills(name)").eq("user_id", userData.id);
+      // 2. Determine whose profile we are looking at (URL check)
+      let targetProfileId = loggedInUser?.id; // Default to 'me'
+      if (id && id !== "me") {
+        targetProfileId = parseInt(id);
+      }
 
-        setEducation(eduData || []);
-        setExperiences(expData || []);
-        // @ts-ignore
-        setSkills(skillsData?.map(s => ({ id: s.id, name: s.skills?.name, level: s.proficiency_level })) || []);
+      // 3. Are we looking at our own profile?
+      setIsOwner(loggedInUser?.id === targetProfileId);
+
+      // 4. Fetch the target profile's data
+      if (targetProfileId) {
+        const { data: userData } = await supabase.from("users").select("*").eq("id", targetProfileId).single();
+
+        if (userData) {
+          setProfile(userData);
+          const { data: eduData } = await supabase.from("education").select("*").eq("user_id", targetProfileId);
+          const { data: expData } = await supabase.from("experiences").select("*").eq("user_id", targetProfileId).order("end_date", { ascending: false });
+          const { data: skillsData } = await supabase.from("user_skills").select("id, proficiency_level, skills(name)").eq("user_id", targetProfileId);
+
+          setEducation(eduData || []);
+          setExperiences(expData || []);
+          // @ts-ignore
+          setSkills(skillsData?.map(s => ({ id: s.id, name: s.skills?.name, level: s.proficiency_level })) || []);
+        }
       }
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchProfile(); }, []);
+  // Re-run the fetch whenever the URL changes
+  useEffect(() => { fetchProfile(); }, [id]);
 
   const { data: userPosts = [] } = useQuery({
     queryKey: ['userPosts', profile?.id],
@@ -263,6 +289,7 @@ export function Profile() {
         {/* 1. HEADER */}
         <ProfileHeader 
           profile={profile}
+          isOwner={isOwner} // <-- PASS isOwner DOWN
           onEditProfile={openEditProfile}
           onAvatarClick={() => { setCropImage(profile.profile_photo_url || null); setZoom(1); setCrop({ x: 0, y: 0 }); setIsPositionImageOpen(true); }}
           onBannerUpload={handleBannerUpload}
@@ -273,6 +300,7 @@ export function Profile() {
         <ProfileAbout 
           bio={profile.bio || ""}
           skills={skills}
+          isOwner={isOwner} // <-- PASS isOwner DOWN
           onEditProfile={openEditProfile}
         />
 
@@ -283,9 +311,12 @@ export function Profile() {
               <CardTitle className="text-xl">Activity</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">{userPosts.length} posts</p>
             </div>
-            <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={() => setIsCreatePostOpen(true)}>
-              Create a post
-            </Button>
+            {/* ONLY OWNER CAN CREATE POST FROM HERE */}
+            {isOwner && (
+              <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={() => setIsCreatePostOpen(true)}>
+                Create a post
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-4">
@@ -293,7 +324,7 @@ export function Profile() {
                 <PostCard 
                   key={post.id}
                   post={post}
-                  currentUser={profile}
+                  currentUser={currentUser} // <-- IMPORTANT: Pass the LOGGED IN user so edit/delete options work correctly
                   hideAuthor={true}
                   onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
                   onDelete={(postId) => deletePostMutation.mutate(postId)}
@@ -308,6 +339,7 @@ export function Profile() {
         <ProfileExperience 
           experiences={experiences}
           userId={profile.id}
+          isOwner={isOwner} // <-- PASS isOwner DOWN
           onRefresh={fetchProfile}
         />
 
@@ -315,6 +347,7 @@ export function Profile() {
         <ProfileEducation 
           education={education}
           userId={profile.id}
+          isOwner={isOwner} // <-- PASS isOwner DOWN
           onRefresh={fetchProfile}
         />
       </div>
@@ -322,132 +355,138 @@ export function Profile() {
       {/* ----------------- MODALS ----------------- */}
 
       {/* MODAL: EDIT PROFILE WITH SKILLS INCLUDED */}
-      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
-        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Profile Info</DialogTitle></DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} /></div>
-            </div>
-            <div className="space-y-2"><Label>Headline</Label><Input value={editForm.headline} onChange={(e) => setEditForm({ ...editForm, headline: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
-
-            {/* NEW SKILLS SECTION INSIDE EDIT PROFILE */}
-            <div className="space-y-2 pt-4 border-t">
-              <Label>Manage Skills</Label>
-              <div className="flex flex-wrap gap-2 mb-2 border rounded-md p-3 min-h-[50px] bg-muted/20">
-                {skills.map((skill) => (
-                  <Badge key={skill.id} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-sm bg-background border shadow-sm">
-                    {skill.name}
-                    <button 
-                      type="button" 
-                      onClick={() => removeSkillMutation.mutate(skill.id)} 
-                      className="hover:text-destructive text-muted-foreground ml-1 transition-colors"
-                      title="Remove Skill"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {skills.length === 0 && <span className="text-sm text-muted-foreground">No skills added yet.</span>}
+      {isOwner && (
+        <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+          <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Edit Profile Info</DialogTitle></DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} /></div>
               </div>
-              <div className="flex gap-2">
-                <Input 
-                  placeholder="Type a skill and press Add..." 
-                  value={newSkillName} 
-                  onChange={(e) => setNewSkillName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addSkillMutation.mutate(newSkillName);
-                    }
-                  }}
-                />
-                <Button 
-                  type="button" 
-                  variant="secondary" 
-                  onClick={() => addSkillMutation.mutate(newSkillName)} 
-                  disabled={!newSkillName.trim() || addSkillMutation.isPending}
-                >
-                  Add
-                </Button>
+              <div className="space-y-2"><Label>Headline</Label><Input value={editForm.headline} onChange={(e) => setEditForm({ ...editForm, headline: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
+
+              {/* SKILLS SECTION INSIDE EDIT PROFILE */}
+              <div className="space-y-2 pt-4 border-t">
+                <Label>Manage Skills</Label>
+                <div className="flex flex-wrap gap-2 mb-2 border rounded-md p-3 min-h-[50px] bg-muted/20">
+                  {skills.map((skill) => (
+                    <Badge key={skill.id} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-sm bg-background border shadow-sm">
+                      {skill.name}
+                      <button 
+                        type="button" 
+                        onClick={() => removeSkillMutation.mutate(skill.id)} 
+                        className="hover:text-destructive text-muted-foreground ml-1 transition-colors"
+                        title="Remove Skill"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  {skills.length === 0 && <span className="text-sm text-muted-foreground">No skills added yet.</span>}
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Type a skill and press Add..." 
+                    value={newSkillName} 
+                    onChange={(e) => setNewSkillName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSkillMutation.mutate(newSkillName);
+                      }
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    onClick={() => addSkillMutation.mutate(newSkillName)} 
+                    disabled={!newSkillName.trim() || addSkillMutation.isPending}
+                  >
+                    Add
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" className="rounded-full" onClick={() => setIsEditProfileOpen(false)}>Close</Button>
-            <Button className="rounded-full px-6" onClick={() => updateProfileMutation.mutate(editForm)} disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? "Saving..." : "Save Changes"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" className="rounded-full" onClick={() => setIsEditProfileOpen(false)}>Close</Button>
+              <Button className="rounded-full px-6" onClick={() => updateProfileMutation.mutate(editForm)} disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? "Saving..." : "Save Changes"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* MODAL: ADJUST IMAGE POSITION */}
-      <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
-        <DialogContent className="sm:max-w-[700px] h-fit max-h-[95vh] flex flex-col pt-10 px-10 pb-4 rounded-2xl">
-          <DialogHeader><DialogTitle>Adjust Image Position & Zoom</DialogTitle></DialogHeader>
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <p className="text-center text-muted-foreground leading-relaxed mb-6">Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.</p>
-            <div className="w-[400px] h-[400px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-6">
-              {cropImage && (
-                <Cropper image={cropImage} crop={crop} zoom={zoom} aspect={1 / 1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)} />
-              )}
+      {isOwner && (
+        <Dialog open={isPositionImageOpen} onOpenChange={setIsPositionImageOpen}>
+          <DialogContent className="sm:max-w-[700px] h-fit max-h-[95vh] flex flex-col pt-10 px-10 pb-4 rounded-2xl">
+            <DialogHeader><DialogTitle>Adjust Image Position & Zoom</DialogTitle></DialogHeader>
+            <div className="flex-1 flex flex-col items-center justify-center p-4">
+              <p className="text-center text-muted-foreground leading-relaxed mb-6">Drag the image inside the circle to adjust its position, and use the slider to zoom in or out.</p>
+              <div className="w-[400px] h-[400px] relative overflow-hidden rounded-full border-4 border-card shadow-xl bg-muted mb-6">
+                {cropImage && (
+                  <Cropper image={cropImage} crop={crop} zoom={zoom} aspect={1 / 1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)} />
+                )}
+              </div>
+              <div className="w-full max-w-sm mb-4">
+                <Slider defaultValue={[1]} max={3} min={1} step={0.1} value={[zoom]} onValueChange={(val) => setZoom(val[0])} className="w-full" />
+              </div>
             </div>
-            <div className="w-full max-w-sm mb-4">
-              <Slider defaultValue={[1]} max={3} min={1} step={0.1} value={[zoom]} onValueChange={(val) => setZoom(val[0])} className="w-full" />
-            </div>
-          </div>
-          <DialogFooter className="flex gap-3 justify-between items-center mt-2 p-2">
-            <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>Cancel</Button>
-            <div className="flex gap-3 justify-end items-center">
-              <Button variant="destructive" className="h-10 w-[140px] rounded-full font-semibold shrink-0 gap-2" onClick={() => deleteImageMutation.mutate()} disabled={deleteImageMutation.isPending}>
-                <Trash2 className="mr-2 h-4 w-4 shrink-0" />{deleteImageMutation.isPending ? "..." : "Delete"}
-              </Button>
-              <Button className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={async () => { if (cropImage && croppedAreaPixels) { const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels); saveCroppedImageMutation.mutate(croppedImageBlob); } }} disabled={saveCroppedImageMutation.isPending}>
-                {saveCroppedImageMutation.isPending ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter className="flex gap-3 justify-between items-center mt-2 p-2">
+              <Button variant="outline" className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={() => { setIsPositionImageOpen(false); setCropImage(null); }}>Cancel</Button>
+              <div className="flex gap-3 justify-end items-center">
+                <Button variant="destructive" className="h-10 w-[140px] rounded-full font-semibold shrink-0 gap-2" onClick={() => deleteImageMutation.mutate()} disabled={deleteImageMutation.isPending}>
+                  <Trash2 className="mr-2 h-4 w-4 shrink-0" />{deleteImageMutation.isPending ? "..." : "Delete"}
+                </Button>
+                <Button className="h-10 w-[140px] rounded-full font-semibold shrink-0" onClick={async () => { if (cropImage && croppedAreaPixels) { const croppedImageBlob = await getCroppedImg(cropImage, croppedAreaPixels); saveCroppedImageMutation.mutate(croppedImageBlob); } }} disabled={saveCroppedImageMutation.isPending}>
+                  {saveCroppedImageMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* MODAL: CREATE POST */}
-      <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
-        <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
-          <DialogHeader className="mb-4"><DialogTitle className="text-xl">Create a post</DialogTitle></DialogHeader>
-          <div className="flex gap-4 mb-4">
-            <Avatar className="h-12 w-12 border border-border">
-              <AvatarImage src={profile?.profile_photo_url} className="object-cover" />
-            </Avatar>
-            <div className="flex flex-col justify-center">
-              <span className="font-semibold text-foreground">{profile?.first_name} {profile?.last_name}</span>
+      {isOwner && (
+        <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+          <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl flex flex-col gap-0">
+            <DialogHeader className="mb-4"><DialogTitle className="text-xl">Create a post</DialogTitle></DialogHeader>
+            <div className="flex gap-4 mb-4">
+              <Avatar className="h-12 w-12 border border-border">
+                <AvatarImage src={profile?.profile_photo_url} className="object-cover" />
+              </Avatar>
+              <div className="flex flex-col justify-center">
+                <span className="font-semibold text-foreground">{profile?.first_name} {profile?.last_name}</span>
+              </div>
             </div>
-          </div>
-          <Textarea placeholder="What do you want to talk about?" className="min-h-[120px] resize-none text-lg border border-border rounded-xl focus-visible:ring-1 p-4 shadow-none mb-4" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} />
-          {newPostImagePreview && (
-            <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden mb-4 border">
-              <img src={newPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
-              <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md" onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}>
-                <X className="h-4 w-4" />
+            <Textarea placeholder="What do you want to talk about?" className="min-h-[120px] resize-none text-lg border border-border rounded-xl focus-visible:ring-1 p-4 shadow-none mb-4" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} />
+            {newPostImagePreview && (
+              <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden mb-4 border">
+                <img src={newPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md" onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <DialogFooter className="flex justify-between items-center sm:justify-between border-t pt-4 mt-auto">
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors p-2.5 rounded-full">
+                  <ImageIcon className="h-5 w-5" />
+                  <input type="file" className="hidden" accept="image/*" onChange={handlePostImageSelect} />
+                </label>
+              </div>
+              <Button className="rounded-full font-semibold px-6" disabled={!newPostContent.trim() || createPostMutation.isPending} onClick={() => createPostMutation.mutate()}>
+                {createPostMutation.isPending ? "Posting..." : "Post"}
               </Button>
-            </div>
-          )}
-          <DialogFooter className="flex justify-between items-center sm:justify-between border-t pt-4 mt-auto">
-            <div className="flex items-center gap-2">
-              <label className="cursor-pointer text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors p-2.5 rounded-full">
-                <ImageIcon className="h-5 w-5" />
-                <input type="file" className="hidden" accept="image/*" onChange={handlePostImageSelect} />
-              </label>
-            </div>
-            <Button className="rounded-full font-semibold px-6" disabled={!newPostContent.trim() || createPostMutation.isPending} onClick={() => createPostMutation.mutate()}>
-              {createPostMutation.isPending ? "Posting..." : "Post"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

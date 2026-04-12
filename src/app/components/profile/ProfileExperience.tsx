@@ -29,13 +29,14 @@ interface ProfileExperienceProps {
   experiences: any[];
   userId: number | undefined;
   onRefresh: () => void;
+  isOwner: boolean; // <-- ADDED THIS
 }
 
-export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExperienceProps) {
+export function ProfileExperience({ experiences, userId, onRefresh, isOwner }: ProfileExperienceProps) { // <-- ADDED THIS
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [deleteId, setDeleteId] = useState<number | null>(null); // State for the pretty delete modal
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -113,9 +114,12 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
       <Card className="shadow-sm border-0">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-xl">Experience</CardTitle>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted" onClick={openNew}>
-            <Plus className="h-5 w-5 text-muted-foreground" />
-          </Button>
+          {/* ONLY SHOW PLUS BUTTON IF OWNER */}
+          {isOwner && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted" onClick={openNew}>
+              <Plus className="h-5 w-5 text-muted-foreground" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
           {experiences.length === 0 ? (
@@ -139,19 +143,22 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
                   )}
                 </div>
                 
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40 z-50">
-                    <DropdownMenuItem className="cursor-pointer" onSelect={() => openEdit(exp)}>
-                      <Pencil className="mr-2 h-4 w-4" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => setDeleteId(exp.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {/* ONLY SHOW EDIT MENU IF OWNER */}
+                {isOwner && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreHorizontal className="h-5 w-5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 z-50">
+                      <DropdownMenuItem className="cursor-pointer" onSelect={() => openEdit(exp)}>
+                        <Pencil className="mr-2 h-4 w-4" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => setDeleteId(exp.id)}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             ))
           )}
@@ -198,7 +205,6 @@ export function ProfileExperience({ experiences, userId, onRefresh }: ProfileExp
         </DialogContent>
       </Dialog>
 
-      {/* Pretty Delete Confirmation Modal */}
       <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="rounded-2xl sm:max-w-[400px]">
           <AlertDialogHeader>

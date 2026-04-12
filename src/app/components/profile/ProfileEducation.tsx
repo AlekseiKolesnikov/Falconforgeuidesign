@@ -28,13 +28,14 @@ interface ProfileEducationProps {
   education: any[];
   userId: number | undefined;
   onRefresh: () => void;
+  isOwner: boolean; // <-- ADDED THIS
 }
 
-export function ProfileEducation({ education, userId, onRefresh }: ProfileEducationProps) {
+export function ProfileEducation({ education, userId, onRefresh, isOwner }: ProfileEducationProps) { // <-- ADDED THIS
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [deleteId, setDeleteId] = useState<number | null>(null); // State for the pretty delete modal
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     school_name: "",
@@ -108,9 +109,12 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
       <Card className="shadow-sm border-0">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-xl">Education</CardTitle>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted" onClick={openNew}>
-            <Plus className="h-5 w-5 text-muted-foreground" />
-          </Button>
+          {/* ONLY SHOW PLUS BUTTON IF OWNER */}
+          {isOwner && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted" onClick={openNew}>
+              <Plus className="h-5 w-5 text-muted-foreground" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
           {education.length === 0 ? (
@@ -127,19 +131,22 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
                   <p className="text-sm text-muted-foreground mt-0.5">{edu.start_year || ''} - {edu.end_year || 'Expected'}</p>
                 </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40 z-50">
-                    <DropdownMenuItem className="cursor-pointer" onSelect={() => openEdit(edu)}>
-                      <Pencil className="mr-2 h-4 w-4" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => setDeleteId(edu.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {/* ONLY SHOW EDIT MENU IF OWNER */}
+                {isOwner && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreHorizontal className="h-5 w-5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 z-50">
+                      <DropdownMenuItem className="cursor-pointer" onSelect={() => openEdit(edu)}>
+                        <Pencil className="mr-2 h-4 w-4" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive cursor-pointer" onSelect={() => setDeleteId(edu.id)}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             ))
           )}
@@ -182,7 +189,6 @@ export function ProfileEducation({ education, userId, onRefresh }: ProfileEducat
         </DialogContent>
       </Dialog>
 
-      {/* Pretty Delete Confirmation Modal */}
       <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="rounded-2xl sm:max-w-[400px]">
           <AlertDialogHeader>
