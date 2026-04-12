@@ -280,6 +280,47 @@ export function Profile() {
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading profile...</div>;
   if (!profile) return <div className="text-center py-20 text-muted-foreground">Profile not found.</div>;
 
+// CHECK IF ALREADY CONNECTED
+  const { data: isFollowing = false } = useQuery({
+    queryKey: ['isFollowing', currentUser?.id, profile?.id],
+    queryFn: async () => {
+      if (!currentUser?.id || !profile?.id) return false;
+      const { data } = await supabase
+        .from('follows')
+        .select('*')
+        .eq('follower_id', currentUser.id)
+        .eq('followed_id', profile.id)
+        .maybeSingle(); // maybeSingle doesn't throw an error if no record is found
+      return !!data;
+    },
+    enabled: !!currentUser?.id && !!profile?.id && !isOwner, // Only run if looking at someone else
+  });
+
+  // TOGGLE CONNECTION MUTATION
+  const toggleConnectMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser?.id || !profile?.id) return;
+      
+      if (isFollowing) {
+        // Disconnect
+        await supabase.from('follows').delete()
+          .eq('follower_id', currentUser.id)
+          .eq('followed_id', profile.id);
+      } else {
+        // Connect
+        await supabase.from('follows').insert({
+          follower_id: currentUser.id,
+          followed_id: profile.id
+        });
+      }
+    },
+    onSuccess: () => {
+      // Refresh the button state instantly
+      queryClient.invalidateQueries({ queryKey: ['isFollowing', currentUser?.id, profile?.id] });
+    }
+  });
+
+
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
       <Navigation />
@@ -290,6 +331,8 @@ export function Profile() {
         <ProfileHeader 
           profile={profile}
           isOwner={isOwner} // <-- PASS isOwner DOWN
+          isFollowing={isFollowing} // <-- ADD THIS
+          onToggleConnect={() => toggleConnectMutation.mutate()}
           onEditProfile={openEditProfile}
           onAvatarClick={() => { setCropImage(profile.profile_photo_url || null); setZoom(1); setCrop({ x: 0, y: 0 }); setIsPositionImageOpen(true); }}
           onBannerUpload={handleBannerUpload}

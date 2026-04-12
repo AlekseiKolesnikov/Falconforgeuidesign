@@ -12,15 +12,17 @@ interface ProfileHeaderProps {
   onAvatarClick: () => void;
   onBannerUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBannerDelete: () => void;
-  isOwner: boolean; // Ensures we know if the viewer is the owner
+  isOwner: boolean; 
+  isFollowing: boolean; 
+  onToggleConnect: () => void;
 }
 
-export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner, isFollowing, onToggleConnect }: ProfileHeaderProps) {
   return (
     <Card className="overflow-hidden shadow-sm border-0">
       <div className="h-64 relative bg-muted">
         <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
-        
+
         {/* ONLY SHOW BANNER EDIT BUTTONS IF OWNER */}
         {isOwner && (
           <div className="absolute top-4 right-4 flex gap-2 z-10">
@@ -44,7 +46,7 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               <AvatarImage src={profile.profile_photo_url} className="object-cover" />
               <AvatarFallback className="text-4xl">{profile.first_name[0]}{profile.last_name[0]}</AvatarFallback>
             </Avatar>
-            
+
             {/* ONLY SHOW AVATAR EDIT BUTTON IF OWNER */}
             {isOwner && (
               <Button size="icon" variant="secondary" className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80" onClick={onAvatarClick}>
@@ -52,19 +54,30 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               </Button>
             )}
           </div>
-          
-          <div className="pt-4 flex gap-2">
-            {/* SHOW CONNECT IF VIEWING SOMEONE ELSE */}
+
+          <div className="mt-6 flex gap-3 justify-center">
+
+            {/* UPDATED CONNECT BUTTON */}
             {!isOwner && (
-              <Button variant="outline" className="gap-2 rounded-full"><Users className="h-4 w-4" />Connect</Button>
+              <Button
+                variant={isFollowing ? "secondary" : "outline"}
+                className="gap-2 rounded-full px-6"
+                onClick={onToggleConnect}
+              >
+                <Users className="h-4 w-4" />
+                {isFollowing ? "Connected" : "Connect"}
+              </Button>
             )}
+
             {/* SHOW EDIT PROFILE IF VIEWING YOURSELF */}
             {isOwner && (
-              <Button variant="secondary" className="gap-2 rounded-full" onClick={onEditProfile}><Edit className="h-4 w-4" />Edit Profile</Button>
+              <Button variant="secondary" className="gap-2 rounded-full px-6" onClick={onEditProfile}>
+                <Edit className="h-4 w-4" />Edit Profile
+              </Button>
             )}
           </div>
         </div>
-        
+
         <div className="mt-4">
           <h1 className="text-3xl font-bold text-foreground">
             {profile.first_name} {profile.last_name}
