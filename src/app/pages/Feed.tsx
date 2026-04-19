@@ -37,13 +37,39 @@ export function Feed() {
     enabled: !!session?.user?.id,
   });
 
-  // 2. Posts query
+// 2. Posts query (UPDATED to handle Organization posts)
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['posts'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('posts').select(`*, users:user_id (id, first_name, last_name, profile_photo_url, headline), post_likes ( user_id ), post_comments (id, content_text, created_at, users:user_id (id, first_name, last_name, profile_photo_url))`).order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *, 
+          users:user_id (id, first_name, last_name, profile_photo_url, headline), 
+          organizations:organization_id (id, name, logo_url, industry),
+          post_likes ( user_id ), 
+          post_comments (id, content_text, created_at, users:user_id (id, first_name, last_name, profile_photo_url))
+        `)
+        .order('created_at', { ascending: false });
+        
       if (error) throw error;
-      return data || [];
+      
+      // FORMAT POSTS: If the post belongs to an organization, swap the author info to the group's info!
+      return (data || []).map((post: any) => {
+        if (post.organizations) {
+          return {
+            ...post,
+            users: {
+              id: post.user_id, // We keep your ID here so the edit/delete buttons still show up for you!
+              first_name: post.organizations.name,
+              last_name: " ", 
+              profile_photo_url: post.organizations.logo_url,
+              headline: post.organizations.industry || "Organization"
+            }
+          };
+        }
+        return post; // If it's a normal user post, just return it as is.
+      });
     }
   });
 
