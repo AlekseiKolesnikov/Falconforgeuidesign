@@ -12,12 +12,14 @@ import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { useAuth } from "../../contexts/AuthContext";
 
 const FALLBACK_BANNER = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop";
 
 export function Groups() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { session } = useAuth(); 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
   // Form state for new organization
@@ -29,7 +31,18 @@ export function Groups() {
     website_url: ""
   });
 
-  // 1. FETCH ALL ORGANIZATIONS
+  // 1. Fetch the current user's integer ID
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser', session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return null;
+      const { data } = await supabase.from('users').select('id').eq('auth_users_uuid', session.user.id).single();
+      return data;
+    },
+    enabled: !!session?.user?.id,
+  });
+
+  // 2. FETCH ALL ORGANIZATIONS
   const { data: organizations = [], isLoading } = useQuery({
     queryKey: ['organizations'],
     queryFn: async () => {
@@ -43,9 +56,12 @@ export function Groups() {
     }
   });
 
-  // 2. CREATE ORGANIZATION MUTATION
+  // 3. CREATE ORGANIZATION MUTATION
   const createOrgMutation = useMutation({
     mutationFn: async () => {
+      // Guard clause: Ensure we have the user ID before trying to insert
+      if (!currentUser?.id) throw new Error("You must be logged in to create a group.");
+
       const { data, error } = await supabase
         .from('organizations')
         .insert([
@@ -54,7 +70,8 @@ export function Groups() {
             industry: formData.industry.trim() || null,
             location: formData.location.trim() || null,
             about: formData.about.trim() || null,
-            website_url: formData.website_url.trim() || null
+            website_url: formData.website_url.trim() || null,
+            owner_id: currentUser.id // <-- ADDED THIS LINE TO ASSIGN OWNERSHIP
           }
         ])
         .select()
