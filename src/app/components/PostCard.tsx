@@ -58,9 +58,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
 
   const isOwner = currentUser?.id === post.user_id;
   const user = post.users; // The author of the post
-  const postDate = new Date(post.created_at).toLocaleString('en-US', {
-    month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
-  });
+  const postDate = new Date(post.created_at).toLocaleDateString();
 
   const likeCount = post.post_likes?.length || 0;
   const hasLiked = post.post_likes?.some((like: any) => like.user_id === currentUser?.id);
@@ -71,7 +69,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
         {/* POST HEADER (Avatar & Name) */}
         <CardHeader className={hideAuthor ? "p-4 pb-0" : "pb-3 pt-5"}>
           <div className="flex items-start justify-between">
-            
+
             {/* Conditionally render Author Info or just the Date */}
             {!hideAuthor ? (
               <div className="flex items-center gap-3">
@@ -85,7 +83,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
                     </Avatar>
                   </Link>
                 )}
-                
+
                 <div>
                   {user ? (
                     <Link to={`/profile/${user.id}`} className="hover:underline cursor-pointer">
@@ -100,7 +98,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
                     <h3 className="font-semibold text-base text-foreground leading-none">Unknown User</h3>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">• {postDate}</span>
+                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">{postDate}</span>
               </div>
             ) : (
               <div className="text-xs text-muted-foreground mt-1">{postDate}</div>
@@ -194,7 +192,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
             <CardFooter className="py-2 px-2 flex gap-1 bg-card">
               {onToggleLike && (
                 <Button
-                  variant="ghost" size="sm" 
+                  variant="ghost" size="sm"
                   onClick={() => onToggleLike(post.id, hasLiked)}
                   className={`flex-1 sm:flex-none transition-colors ${hasLiked ? 'text-blue-600 font-semibold hover:text-blue-700 hover:bg-blue-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                 >
@@ -204,7 +202,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
               )}
               {onCreateComment && (
                 <Button
-                  variant="ghost" size="sm" 
+                  variant="ghost" size="sm"
                   onClick={() => setShowComments(!showComments)}
                   className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none"
                 >
@@ -245,9 +243,9 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
                     <AvatarFallback className="text-xs bg-primary text-primary-foreground">{currentUser?.first_name?.[0]}{currentUser?.last_name?.[0]}</AvatarFallback>
                   </Avatar>
                   <Input
-                    value={commentInput} 
+                    value={commentInput}
                     onChange={(e) => setCommentInput(e.target.value)}
-                    placeholder="Write a comment..." 
+                    placeholder="Write a comment..."
                     className="flex-1 bg-background"
                     onKeyDown={(e) => { if (e.key === 'Enter') handleCommentSubmit(); }}
                   />
