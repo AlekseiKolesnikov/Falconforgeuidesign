@@ -35,12 +35,16 @@ export function Organization() {
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. GET CURRENT USER
+  // 1. GET CURRENT USER (FIXED: Now fetches first_name, last_name, and photo so PostCard doesn't crash!)
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
       if (!session?.user?.id) return null;
-      const { data } = await supabase.from('users').select('id').eq('auth_users_uuid', session.user.id).single();
+      const { data } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, profile_photo_url') 
+        .eq('auth_users_uuid', session.user.id)
+        .single();
       return data;
     },
     enabled: !!session?.user?.id,
@@ -97,7 +101,7 @@ export function Organization() {
 
   const deleteOrgMutation = useMutation({
     mutationFn: async () => { await supabase.from('organizations').delete().eq('id', id); },
-    onSuccess: () => { navigate('/groups'); } // Send them back to groups directory!
+    onSuccess: () => { navigate('/groups'); } 
   });
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'banner' | 'logo') => {
@@ -146,7 +150,7 @@ export function Organization() {
       
       const { data: newPost, error } = await supabase.from('posts').insert({
         user_id: currentUser.id, 
-        organization_id: id, // THIS MAKES IT AN ORG POST
+        organization_id: id, 
         content: newPostContent.trim(), 
         image_url: imageUrl, 
         hashtags: extractedTags
@@ -173,13 +177,13 @@ export function Organization() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization_posts', id] })
   });
 
-  // FORMAT POSTS: We hijack the 'users' object so PostCard displays the Organization's name and logo!
+  // FORMAT POSTS (FIXED: Added a space to last_name so PostCard AvatarFallback doesn't crash on an empty string)
   const formattedOrgPosts = orgPosts.map((post: any) => ({
     ...post,
     users: {
       id: post.user_id, 
-      first_name: org?.name,
-      last_name: "",
+      first_name: org?.name || "Group",
+      last_name: " ", 
       profile_photo_url: org?.logo_url,
       headline: org?.industry || "Organization"
     }
@@ -272,7 +276,7 @@ export function Organization() {
                   <PostCard 
                     key={post.id}
                     post={post}
-                    currentUser={currentUser} // Passes the logged-in user so they can edit/delete their own org posts
+                    currentUser={currentUser} 
                     onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
                     onDelete={(postId) => deletePostMutation.mutate(postId)}
                     isUpdating={updatePostMutation.isPending}
