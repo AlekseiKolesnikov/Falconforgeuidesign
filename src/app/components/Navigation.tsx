@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom"; // <-- ADDED useNavigate here
 import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Input } from "./ui/input";
@@ -9,9 +9,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 
 export function Navigation() {
-  // FIXED: Removed signOut from here
   const { session } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate(); // <-- INITIALIZED navigate here
 
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser', session?.user?.id],
@@ -30,9 +30,10 @@ export function Navigation() {
   // Helper to highlight the active tab
   const isActive = (path: string) => location.pathname === path;
 
-  // FIXED: Added a simple logout handler using Supabase directly
+  // UPDATED: Now it logs out AND redirects to the home/login page
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    navigate("/"); // <-- ADDED REDIRECT here
   };
 
   return (
@@ -94,7 +95,6 @@ export function Navigation() {
             </Avatar>
           </Link>
 
-          {/* FIXED: Using the direct supabase handler here */}
           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full">
             <LogOut className="h-5 w-5" />
           </Button>
