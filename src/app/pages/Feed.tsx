@@ -11,7 +11,7 @@ import { Image as ImageIcon, X, Bookmark, Users, Link as LinkIcon } from "lucide
 import { supabase } from '../../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { PostCard } from "../components/PostCard"; 
+import { PostCard } from "../components/PostCard";
 
 const FALLBACK_COVER = "https://images.unsplash.com/photo-1759889392274-246af1a984ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx1bml2ZXJzaXR5JTIwY2FtcHVzJTIwcHVycGxlJTIwYnVpbGRpbmd8ZW58MXx8fHwxNzczMDAwMjgyfDA&ixlib=rb-4.1.0&q=80&w=1080";
 
@@ -19,7 +19,7 @@ export function Feed() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [content, setContent] = useState('');
-  
+
   // Image Upload States
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -130,25 +130,25 @@ export function Feed() {
 
       {/* Expanded max-width from 3xl to 5xl/6xl to fit the sidebar */}
       <div className="container max-w-6xl mx-auto px-4 py-6">
-        
+
         {/* CSS GRID LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          
+
           {/* ========================================== */}
           {/* LEFT SIDEBAR (ISLANDS)                     */}
           {/* ========================================== */}
           <div className="hidden lg:flex flex-col gap-4 col-span-1">
-            
+
             {/* ISLAND 1: PROFILE SUMMARY */}
             <Card className="overflow-hidden shadow-sm border-0">
               <div className="h-16 bg-muted relative">
-                <img 
-                  src={currentUser?.banner_url || FALLBACK_COVER} 
-                  alt="Cover" 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={currentUser?.banner_url || FALLBACK_COVER}
+                  alt="Cover"
+                  className="w-full h-full object-cover"
                 />
               </div>
-              
+
               <CardContent className="pt-0 pb-5 px-4 flex flex-col items-center text-center">
                 <Link to="/profile/me">
                   <Avatar className="h-16 w-16 border-2 border-card shadow-sm -mt-8 mb-3 hover:opacity-90 transition-opacity bg-muted">
@@ -170,7 +170,7 @@ export function Feed() {
 
             {/* ISLAND 2: QUICK LINKS */}
             <Card className="shadow-sm border-0 overflow-hidden">
-              <div className="flex flex-col py-2">
+              <div className="flex flex-col"> {/* <-- Removed py-2 from here! */}
                 <Link to="/saved" className="flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors text-sm font-medium text-foreground">
                   <Bookmark className="h-4 w-4 text-muted-foreground" />
                   Saved items
@@ -192,7 +192,7 @@ export function Feed() {
           {/* CENTER COLUMN (THE FEED)                   */}
           {/* ========================================== */}
           <div className="col-span-1 lg:col-span-3 lg:pr-12 xl:pr-24 flex flex-col gap-4">
-            
+
             {/* Create Post Card */}
             <Card className="shadow-sm border-0">
               <CardHeader className="pb-4">
@@ -246,7 +246,7 @@ export function Feed() {
               )}
 
               {posts.map((post: any) => (
-                <PostCard 
+                <PostCard
                   key={post.id}
                   post={post}
                   currentUser={currentUser}
