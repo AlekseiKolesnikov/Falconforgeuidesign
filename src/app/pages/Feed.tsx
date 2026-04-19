@@ -37,7 +37,7 @@ export function Feed() {
     enabled: !!session?.user?.id,
   });
 
-// 2. Posts query (UPDATED to handle Organization posts)
+  // 2. Posts query (UPDATED to handle Organization posts)
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['posts'],
     queryFn: async () => {
@@ -51,9 +51,9 @@ export function Feed() {
           post_comments (id, content_text, created_at, users:user_id (id, first_name, last_name, profile_photo_url))
         `)
         .order('created_at', { ascending: false });
-        
+
       if (error) throw error;
-      
+
       // FORMAT POSTS: If the post belongs to an organization, swap the author info to the group's info!
       return (data || []).map((post: any) => {
         if (post.organizations) {
@@ -62,7 +62,7 @@ export function Feed() {
             users: {
               id: post.user_id, // We keep your ID here so the edit/delete buttons still show up for you!
               first_name: post.organizations.name,
-              last_name: " ", 
+              last_name: " ",
               profile_photo_url: post.organizations.logo_url,
               headline: post.organizations.industry || "Organization"
             }
@@ -197,17 +197,27 @@ export function Feed() {
             {/* ISLAND 2: QUICK LINKS */}
             <Card className="shadow-sm border-0 overflow-hidden">
               <div className="flex flex-col"> {/* <-- Removed py-2 from here! */}
-                <Link to="/saved" className="flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors text-sm font-medium text-foreground">
-                  <Bookmark className="h-4 w-4 text-muted-foreground" />
-                  Saved items
+                <Link to="/saved" className="w-full">
+                  <Button variant="ghost" className="w-full justify-start gap-3 px-3 py-6 hover:bg-muted group">
+                    <Bookmark className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                    <div className="flex flex-col items-start">
+                      <span className="text-sm font-semibold">Saved items</span>
+                      <span className="text-xs text-muted-foreground">Posts you've bookmarked</span>
+                    </div>
+                  </Button>
                 </Link>
                 <Link to="/groups" className="flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors text-sm font-medium text-foreground">
                   <Users className="h-4 w-4 text-muted-foreground" />
                   Groups
                 </Link>
-                <Link to="/connections" className="flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors text-sm font-medium text-foreground">
-                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                  Connections
+                <Link to="/connections" className="w-full">
+                  <Button variant="ghost" className="w-full justify-start gap-3 px-3 py-6 hover:bg-muted group">
+                    <Users className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                    <div className="flex flex-col items-start">
+                      <span className="text-sm font-semibold">Connections</span>
+                      <span className="text-xs text-muted-foreground">Grow your network</span>
+                    </div>
+                  </Button>
                 </Link>
               </div>
             </Card>

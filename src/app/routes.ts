@@ -8,6 +8,8 @@ import { Events } from "../app/pages/Events";
 import { Organization } from "../app/pages/Organization";
 import { Groups } from "../app/pages/Groups";
 import { Network } from "../app/pages/Network";
+import { Connections } from "../app/pages/Connections";
+import { SavedItems } from "../app/pages/SavedItmes";
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +24,8 @@ export const router = createBrowserRouter([
       { path: "opportunities", Component: Opportunities },
       { path: "network", Component: Network },
       { path: "events", Component: Events },
+      { path: "connections", Component: Connections },
+      { path: "saved", Component: SavedItems },
     ],
   },
 ]);
