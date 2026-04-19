@@ -1,7 +1,7 @@
 import * as React from "react";
-import { useState, useEffect, useRef } from "react"; // Added hooks
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap, User } from "lucide-react";
+import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap, User, Users } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -140,10 +140,18 @@ export function Navigation() {
             <Home className="h-5 w-5" />
             <span>Feed</span>
           </Link>
+          
+          {/* NEW NETWORK TAB LINKED TO GROUPS */}
+          <Link to="/groups" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/groups') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+            <Users className="h-5 w-5" />
+            <span>Network</span>
+          </Link>
+          
           <Link to="/opportunities" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/opportunities') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Briefcase className="h-5 w-5" />
             <span>Opportunities</span>
           </Link>
+          
           <Link to="/events" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/events') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Calendar className="h-5 w-5" />
             <span>Events</span>
