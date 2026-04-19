@@ -6,6 +6,7 @@ import { Profile } from "../app/pages/Profile";
 import { Opportunities } from "../app/pages/Opportunities";
 import { Events } from "../app/pages/Events";
 import { Organization } from "../app/pages/Organization";
+import { Groups } from "../app/pages/Groups";
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "feed", Component: Feed },
       { path: "profile/:id", Component: Profile },
       { path: "organization/:id", Component: Organization },
+      { path: "groups", Component: Groups },
       { path: "opportunities", Component: Opportunities },
       { path: "events", Component: Events },
     ],
