@@ -7,6 +7,7 @@ import { Opportunities } from "../app/pages/Opportunities";
 import { Events } from "../app/pages/Events";
 import { Organization } from "../app/pages/Organization";
 import { Groups } from "../app/pages/Groups";
+import { Network } from "../app/pages/Network";
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
       { path: "organization/:id", Component: Organization },
       { path: "groups", Component: Groups },
       { path: "opportunities", Component: Opportunities },
+      { path: "network", Component: Network },
       { path: "events", Component: Events },
     ],
   },

@@ -13,7 +13,7 @@ export function Navigation() {
   const { session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // SEARCH STATES
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -46,7 +46,7 @@ export function Navigation() {
     queryKey: ['userSearch', searchQuery],
     queryFn: async () => {
       if (searchQuery.trim().length < 2) return [];
-      
+
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, profile_photo_url, headline')
@@ -69,7 +69,7 @@ export function Navigation() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
       <div className="container max-w-7xl mx-auto h-16 px-4 flex items-center relative">
-        
+
         {/* LEFT SECTION (Logo & Search) */}
         <div className="flex items-center gap-4 w-1/3">
           <Link to="/feed" className="flex items-center gap-2 font-bold text-lg text-foreground hover:opacity-90">
@@ -78,20 +78,20 @@ export function Navigation() {
             </div>
             <span className="hidden lg:block text-xl tracking-tight">Falcon Forge</span>
           </Link>
-          
+
           {/* SEARCH INPUT WRAPPER */}
           <div className="relative hidden md:block max-w-[280px] w-full" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-            <Input 
-              type="search" 
-              placeholder="Search people..." 
+            <Input
+              type="search"
+              placeholder="Search people..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9" 
+              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9"
             />
 
             {/* SEARCH RESULTS DROPDOWN */}
@@ -140,18 +140,18 @@ export function Navigation() {
             <Home className="h-5 w-5" />
             <span>Feed</span>
           </Link>
-          
+
           {/* NEW NETWORK TAB LINKED TO GROUPS */}
-          <Link to="/groups" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/groups') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+          <Link to="/network" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/network') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Users className="h-5 w-5" />
             <span>Network</span>
           </Link>
-          
+
           <Link to="/opportunities" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/opportunities') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Briefcase className="h-5 w-5" />
             <span>Opportunities</span>
           </Link>
-          
+
           <Link to="/events" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/events') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Calendar className="h-5 w-5" />
             <span>Events</span>
