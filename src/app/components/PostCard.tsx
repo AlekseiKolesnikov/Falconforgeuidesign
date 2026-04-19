@@ -68,11 +68,11 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
       <Card className="shadow-sm border-0 overflow-hidden">
         {/* POST HEADER (Avatar & Name) */}
         <CardHeader className={hideAuthor ? "p-4 pb-0" : "pb-3 pt-5"}>
-          <div className="flex items-start justify-between">
-
-            {/* Conditionally render Author Info or just the Date */}
+          <div className="flex items-start justify-between w-full gap-4">
+            
+            {/* LEFT SIDE: Author Info */}
             {!hideAuthor ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 overflow-hidden">
                 {user && (
                   <Link to={`/profile/${user.id}`} className="cursor-pointer hover:opacity-80 transition-opacity shrink-0">
                     <Avatar className="w-12 h-12">
@@ -83,14 +83,14 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
                     </Avatar>
                   </Link>
                 )}
-
-                <div>
+                
+                <div className="overflow-hidden">
                   {user ? (
                     <Link to={`/profile/${user.id}`} className="hover:underline cursor-pointer">
-                      <h3 className="font-semibold text-base text-foreground leading-none">
+                      <h3 className="font-semibold text-base text-foreground leading-none truncate">
                         {user.first_name} {user.last_name}
                       </h3>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                      <p className="text-sm text-muted-foreground mt-1 truncate">
                         {user.headline || 'Student'}
                       </p>
                     </Link>
@@ -98,16 +98,17 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
                     <h3 className="font-semibold text-base text-foreground leading-none">Unknown User</h3>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">{postDate}</span>
               </div>
             ) : (
-              <div className="text-xs text-muted-foreground mt-1">{postDate}</div>
+              <div /> // Empty spacer if author is hidden
             )}
 
-            <div className="flex items-center gap-2">
-              {!hideAuthor && (
-                <span className="text-xs text-muted-foreground sm:hidden">{new Date(post.created_at).toLocaleDateString()}</span>
-              )}
+            {/* RIGHT SIDE: Date & 3-Dot Menu */}
+            <div className="flex items-center gap-3 shrink-0 ml-auto">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {postDate}
+              </span>
+
               {isOwner && (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
@@ -139,6 +140,7 @@ export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, on
                 </DropdownMenu>
               )}
             </div>
+            
           </div>
         </CardHeader>
 
