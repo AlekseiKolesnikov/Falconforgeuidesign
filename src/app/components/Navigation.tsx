@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap, User, Users } from "lucide-react";
+import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap, Users } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -13,7 +13,7 @@ export function Navigation() {
   const { session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
+  
   // SEARCH STATES
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -46,7 +46,7 @@ export function Navigation() {
     queryKey: ['userSearch', searchQuery],
     queryFn: async () => {
       if (searchQuery.trim().length < 2) return [];
-
+      
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, profile_photo_url, headline')
@@ -68,33 +68,32 @@ export function Navigation() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
-      <div className="container max-w-7xl mx-auto h-16 px-4 flex items-center relative">
-
-        {/* LEFT SECTION (Logo & Search) */}
-        <div className="flex items-center gap-4 w-1/3">
-          <Link to="/feed" className="flex items-center gap-2 font-bold text-lg text-foreground hover:opacity-90">
-            <div className="bg-primary text-primary-foreground p-1.5 rounded-md flex items-center justify-center shrink-0">
+      {/* CHANGED: Swapped to justify-between and added gap to prevent overlap */}
+      <div className="container max-w-7xl mx-auto h-16 px-4 flex items-center justify-between gap-4">
+        
+        {/* 1. LEFT SECTION (Logo & Search) - CHANGED to flex-1 min-w-0 */}
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <Link to="/feed" className="flex items-center gap-2 font-bold text-lg text-foreground hover:opacity-90 shrink-0">
+            <div className="bg-primary text-primary-foreground p-1.5 rounded-md flex items-center justify-center">
               <Zap className="h-5 w-5 fill-current" />
             </div>
-            <span className="hidden lg:block text-xl tracking-tight">Falcon Forge</span>
+            <span className="hidden xl:block text-xl tracking-tight">Falcon Forge</span>
           </Link>
-
-          {/* SEARCH INPUT WRAPPER */}
+          
           <div className="relative hidden md:block max-w-[280px] w-full" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-            <Input
-              type="search"
-              placeholder="Search people..."
+            <Input 
+              type="search" 
+              placeholder="Search people..." 
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9"
+              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9" 
             />
 
-            {/* SEARCH RESULTS DROPDOWN */}
             {isSearchOpen && searchQuery.trim().length >= 2 && (
               <div className="absolute top-full mt-2 w-full bg-card border rounded-xl shadow-lg overflow-hidden py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
                 {isSearching ? (
@@ -134,33 +133,32 @@ export function Navigation() {
           </div>
         </div>
 
-        {/* CENTER SECTION (Nav Links) */}
-        <nav className="hidden md:flex items-center gap-2 absolute left-1/2 transform -translate-x-1/2 h-full">
-          <Link to="/feed" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/feed') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+        {/* 2. CENTER SECTION (Nav Links) - CHANGED: Removed absolute positioning, added shrink-0 */}
+        <nav className="hidden md:flex items-center justify-center gap-1 lg:gap-2 h-full shrink-0">
+          <Link to="/feed" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/feed') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Home className="h-5 w-5" />
-            <span>Feed</span>
+            <span className="hidden lg:inline-block">Feed</span>
           </Link>
-
-          {/* NEW NETWORK TAB LINKED TO GROUPS */}
-          <Link to="/network" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/network') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+          
+          <Link to="/network" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/network') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Users className="h-5 w-5" />
-            <span>Network</span>
+            <span className="hidden lg:inline-block">Network</span>
           </Link>
-
-          <Link to="/opportunities" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/opportunities') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+          
+          <Link to="/opportunities" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/opportunities') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Briefcase className="h-5 w-5" />
-            <span>Opportunities</span>
+            <span className="hidden lg:inline-block">Opportunities</span>
           </Link>
-
-          <Link to="/events" className={`flex items-center gap-2 px-4 h-full border-b-2 transition-colors ${isActive('/events') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
+          
+          <Link to="/events" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/events') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Calendar className="h-5 w-5" />
-            <span>Events</span>
+            <span className="hidden lg:inline-block">Events</span>
           </Link>
         </nav>
 
-        {/* RIGHT SECTION (User Actions) */}
-        <div className="flex items-center justify-end gap-4 w-1/3 ml-auto">
-          <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground">
+        {/* 3. RIGHT SECTION (User Actions) - CHANGED to flex-1 */}
+        <div className="flex items-center justify-end gap-2 lg:gap-4 flex-1">
+          <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground hidden sm:flex">
             <Bell className="h-5 w-5" />
             <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive border-2 border-background"></span>
           </Button>
@@ -178,6 +176,7 @@ export function Navigation() {
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
+
       </div>
     </header>
   );
