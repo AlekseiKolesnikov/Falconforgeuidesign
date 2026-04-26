@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Camera, Edit, Mail, MapPin, Pencil, Trash2, Users } from "lucide-react";
+import { Camera, Edit, Mail, MapPin, Pencil, Trash2, Users, UserPlus, Clock, Check } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -13,39 +13,41 @@ const FALLBACK_COVER = "https://images.unsplash.com/photo-1759889392274-246af1a9
 
 interface ProfileHeaderProps {
   profile: any;
+  currentUser: any; // Added this so we know who is looking at the profile
   onEditProfile: () => void;
   onAvatarClick: () => void;
   onBannerUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBannerDelete: () => void;
   isOwner: boolean; 
-  isFollowing: boolean; 
+  connectionStatus: any; // Added this to pass down the status
   onToggleConnect: () => void;
 }
 
-export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner, isFollowing, onToggleConnect }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner, connectionStatus, onToggleConnect }: ProfileHeaderProps) {
   const [isConnectionsOpen, setIsConnectionsOpen] = useState(false);
 
-  // FETCH CONNECTIONS JUST FOR THE HEADER MODAL
+  // FETCH CONNECTIONS JUST FOR THE HEADER MODAL (UPDATED to pull from the new 'connections' table)
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ['connections', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return [];
-
-      const { data: follows } = await supabase
-        .from('follows')
-        .select('followed_id')
-        .eq('follower_id', profile.id);
-
-      if (!follows || follows.length === 0) return [];
-
-      const followedIds = follows.map(f => f.followed_id);
+      const { data, error } = await supabase
+        .from('connections')
+        .select(`
+          id, sender_id, receiver_id,
+          sender:users!sender_id(id, first_name, last_name, profile_photo_url, headline),
+          receiver:users!receiver_id(id, first_name, last_name, profile_photo_url, headline)
+        `)
+        .eq('status', 'accepted')
+        .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`);
       
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, profile_photo_url, headline')
-        .in('id', followedIds);
-
-      return users || [];
+      if (error) throw error;
+      
+      // Extract the profile of the person who ISN'T the profile owner
+      return (data || []).map((conn: any) => {
+        const otherPerson = conn.sender_id === profile.id ? conn.receiver : conn.sender;
+        return { connection_id: conn.id, ...otherPerson };
+      });
     },
     enabled: !!profile?.id,
   });
@@ -88,21 +90,36 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               )}
             </div>
 
-            {/* ACTION BUTTONS (Moved connections link out of here) */}
+            {/* ACTION BUTTONS */}
             <div className="pt-4 flex gap-2">
-              {/* SHOW CONNECT IF VIEWING SOMEONE ELSE */}
+              
+              {/* DYNAMIC CONNECT BUTTON FOR VISITORS */}
               {!isOwner && (
-                <Button
-                  variant={isFollowing ? "secondary" : "outline"}
-                  className="gap-2 rounded-full px-6"
-                  onClick={onToggleConnect}
-                >
-                  <Users className="h-4 w-4" />
-                  {isFollowing ? "Connected" : "Connect"}
-                </Button>
+                <>
+                  {connectionStatus?.status === 'accepted' ? (
+                    <Button variant="outline" className="gap-2 rounded-full px-6" disabled>
+                      <Check className="h-4 w-4" /> Connected
+                    </Button>
+                  ) : connectionStatus?.status === 'pending' ? (
+                    connectionStatus.sender_id === currentUser?.id ? (
+                      <Button variant="secondary" className="gap-2 rounded-full px-6" disabled>
+                        <Clock className="h-4 w-4" /> Pending
+                      </Button>
+                    ) : (
+                      <Button className="gap-2 rounded-full px-6" asChild>
+                        <Link to="/connections">Respond</Link>
+                      </Button>
+                    )
+                  ) : (
+                    <Button className="gap-2 rounded-full px-6 shadow-sm" onClick={onToggleConnect}>
+                      <UserPlus className="h-4 w-4" /> Connect
+                    </Button>
+                  )}
+                  <Button variant="outline" className="rounded-full px-6 shadow-sm">Message</Button>
+                </>
               )}
 
-              {/* SHOW EDIT PROFILE IF VIEWING YOURSELF */}
+              {/* EDIT PROFILE FOR OWNER */}
               {isOwner && (
                 <Button variant="secondary" className="gap-2 rounded-full px-6" onClick={onEditProfile}>
                   <Edit className="h-4 w-4" />Edit Profile
@@ -117,13 +134,11 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
               {profile.is_verified && <span className="text-blue-500 ml-2 text-xl" title="Verified">✅</span>}
             </h1>
             
-            {/* NEW LAYOUT: Headline and Connections on the exact same row */}
             <div className="flex justify-between items-center mt-1 gap-4">
               <p className="text-lg text-foreground">
                 {profile.headline || "Student at University of Montevallo"}
               </p>
               
-              {/* CLICKABLE CONNECTIONS TEXT (Now exactly 1px larger using text-[15px]) */}
               <button 
                 onClick={() => setIsConnectionsOpen(true)}
                 className="text-[15px] font-semibold text-primary hover:text-primary/80 hover:underline transition-colors shrink-0"
@@ -162,7 +177,7 @@ export function ProfileHeader({ profile, onEditProfile, onAvatarClick, onBannerU
                   <Link 
                     key={user.id} 
                     to={`/profile/${user.id}`} 
-                    onClick={() => setIsConnectionsOpen(false)} // Closes modal when navigating
+                    onClick={() => setIsConnectionsOpen(false)}
                     className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors"
                   >
                     <Avatar className="h-10 w-10 border">

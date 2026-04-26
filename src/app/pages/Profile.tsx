@@ -14,7 +14,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
 import { X, Image as ImageIcon, Trash2 } from "lucide-react";
 import Cropper from 'react-easy-crop';
-import { useParams } from "react-router-dom"; 
+import { useParams } from "react-router-dom";
 
 // IMPORT YOUR CLEAN COMPONENTS
 import { PostCard } from "../components/PostCard";
@@ -66,12 +66,12 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob> =>
 export function Profile() {
   const queryClient = useQueryClient();
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  
-  const { id } = useParams<{ id: string }>(); 
+
+  const { id } = useParams<{ id: string }>();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null); 
-  const [isOwner, setIsOwner] = useState(false); 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   const [education, setEducation] = useState<any[]>([]);
   const [experiences, setExperiences] = useState<any[]>([]);
@@ -104,10 +104,10 @@ export function Profile() {
         .select("id, profile_photo_url, first_name, last_name")
         .eq("auth_users_uuid", authUser.id)
         .single();
-      
+
       setCurrentUser(loggedInUser);
 
-      let targetProfileId = loggedInUser?.id; 
+      let targetProfileId = loggedInUser?.id;
       if (id && id !== "me") {
         targetProfileId = parseInt(id);
       }
@@ -146,34 +146,32 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
-  // --- CONNECTION QUERY & MUTATION ---
-  const { data: isFollowing = false } = useQuery({
-    queryKey: ['isFollowing', currentUser?.id, profile?.id],
+  // --- NEW CONNECTION QUERY & MUTATION ---
+  const { data: connectionStatus } = useQuery({
+    queryKey: ['connection', currentUser?.id, profile?.id],
     queryFn: async () => {
-      if (!currentUser?.id || !profile?.id) return false;
-      const { data } = await supabase
-        .from('follows')
+      if (!currentUser?.id || !profile?.id || currentUser.id === profile.id) return null;
+      const { data, error } = await supabase
+        .from('connections')
         .select('*')
-        .eq('follower_id', currentUser.id)
-        .eq('followed_id', profile.id)
-        .maybeSingle(); 
-      return !!data;
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${currentUser.id})`)
+        .maybeSingle(); // maybeSingle prevents errors if no connection exists
+      
+      if (error) throw error;
+      return data || null;
     },
-    enabled: !!currentUser?.id && !!profile?.id && !isOwner, 
+    enabled: !!currentUser?.id && !!profile?.id && !isOwner,
   });
 
-  const toggleConnectMutation = useMutation({
+  const connectMutation = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id || !profile?.id) return;
-      if (isFollowing) {
-        await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('followed_id', profile.id);
-      } else {
-        await supabase.from('follows').insert({ follower_id: currentUser.id, followed_id: profile.id });
-      }
+      await supabase.from('connections').insert({ sender_id: currentUser.id, receiver_id: profile.id });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['isFollowing', currentUser?.id, profile?.id] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
 
+  // --- PROFILE MUTATIONS ---
   const updateProfileMutation = useMutation({
     mutationFn: async (formData: typeof editForm) => { await supabase.from('users').update(formData).eq('id', profile?.id); },
     onSuccess: () => { setIsEditProfileOpen(false); fetchProfile(); }
@@ -191,6 +189,11 @@ export function Profile() {
       fetchProfile();
     } catch (error) { console.error("Banner upload failed", error); }
   };
+
+  const deleteBannerMutation = useMutation({
+    mutationFn: async () => { await supabase.from('users').update({ banner_url: null }).eq('id', profile?.id); },
+    onSuccess: () => fetchProfile()
+  });
 
   const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -307,21 +310,25 @@ export function Profile() {
       <Navigation />
 
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
-        
+
+        {/* Hidden input to handle the avatar upload click from ProfileHeader */}
+        <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarSelect} />
+
         {/* 1. HEADER */}
-        <ProfileHeader 
-          profile={profile}
+        <ProfileHeader
+          profile={profile} 
+          currentUser={currentUser} 
+          connectionStatus={connectionStatus} 
           isOwner={isOwner}
-          isFollowing={isFollowing}
-          onToggleConnect={() => toggleConnectMutation.mutate()}
           onEditProfile={openEditProfile}
-          onAvatarClick={() => { setCropImage(profile.profile_photo_url || null); setZoom(1); setCrop({ x: 0, y: 0 }); setIsPositionImageOpen(true); }}
+          onAvatarClick={() => { if (avatarInputRef.current) avatarInputRef.current.click(); }}
           onBannerUpload={handleBannerUpload}
-          onBannerDelete={() => { if(confirm('Delete banner?')) supabase.from('users').update({ banner_url: null }).eq('id', profile.id).then(() => fetchProfile()) }}
+          onBannerDelete={() => deleteBannerMutation.mutate()}
+          onToggleConnect={() => connectMutation.mutate()} 
         />
 
         {/* 2. ABOUT & SKILLS */}
-        <ProfileAbout 
+        <ProfileAbout
           bio={profile.bio || ""}
           skills={skills}
           isOwner={isOwner}
@@ -344,10 +351,10 @@ export function Profile() {
           <CardContent>
             <div className="grid md:grid-cols-2 gap-4">
               {userPosts.map((post: any) => (
-                <PostCard 
+                <PostCard
                   key={post.id}
                   post={post}
-                  currentUser={currentUser} 
+                  currentUser={currentUser}
                   hideAuthor={true}
                   onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
                   onDelete={(postId) => deletePostMutation.mutate(postId)}
@@ -359,7 +366,7 @@ export function Profile() {
         </Card>
 
         {/* 4. EXPERIENCE */}
-        <ProfileExperience 
+        <ProfileExperience
           experiences={experiences}
           userId={profile.id}
           isOwner={isOwner}
@@ -367,7 +374,7 @@ export function Profile() {
         />
 
         {/* 5. EDUCATION */}
-        <ProfileEducation 
+        <ProfileEducation
           education={education}
           userId={profile.id}
           isOwner={isOwner}
@@ -382,7 +389,7 @@ export function Profile() {
         <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
           <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit Profile Info</DialogTitle></DialogHeader>
-            
+
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>First Name</Label><Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} /></div>
@@ -399,9 +406,9 @@ export function Profile() {
                   {skills.map((skill) => (
                     <Badge key={skill.id} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-sm bg-background border shadow-sm">
                       {skill.name}
-                      <button 
-                        type="button" 
-                        onClick={() => removeSkillMutation.mutate(skill.id)} 
+                      <button
+                        type="button"
+                        onClick={() => removeSkillMutation.mutate(skill.id)}
                         className="hover:text-destructive text-muted-foreground ml-1 transition-colors"
                         title="Remove Skill"
                       >
@@ -412,9 +419,9 @@ export function Profile() {
                   {skills.length === 0 && <span className="text-sm text-muted-foreground">No skills added yet.</span>}
                 </div>
                 <div className="flex gap-2">
-                  <Input 
-                    placeholder="Type a skill and press Add..." 
-                    value={newSkillName} 
+                  <Input
+                    placeholder="Type a skill and press Add..."
+                    value={newSkillName}
                     onChange={(e) => setNewSkillName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -423,10 +430,10 @@ export function Profile() {
                       }
                     }}
                   />
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    onClick={() => addSkillMutation.mutate(newSkillName)} 
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => addSkillMutation.mutate(newSkillName)}
                     disabled={!newSkillName.trim() || addSkillMutation.isPending}
                   >
                     Add

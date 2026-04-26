@@ -13,7 +13,6 @@ export function Connections() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
 
-  // 1. GET CURRENT USER
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
@@ -24,39 +23,43 @@ export function Connections() {
     enabled: !!session?.user?.id,
   });
 
-  // 2. FETCH PENDING INCOMING REQUESTS
+  // FETCH PENDING
   const { data: pendingRequests = [] } = useQuery({
     queryKey: ['pendingRequests', currentUser?.id],
     queryFn: async () => {
       if (!currentUser?.id) return [];
       const { data, error } = await supabase
         .from('connections')
-        .select(`id, sender_id, users!connections_sender_id_fkey(id, first_name, last_name, profile_photo_url, headline)`)
+        // UPDATED: Using cleaner column-based relationship syntax
+        .select(`id, sender_id, users!sender_id(id, first_name, last_name, profile_photo_url, headline)`)
         .eq('receiver_id', currentUser.id)
         .eq('status', 'pending');
+      
       if (error) throw error;
       return data || [];
     },
     enabled: !!currentUser?.id,
   });
 
-  // 3. FETCH FULLY ACCEPTED CONNECTIONS
+  // FETCH ACCEPTED
   const { data: myConnections = [] } = useQuery({
     queryKey: ['myConnections', currentUser?.id],
     queryFn: async () => {
       if (!currentUser?.id) return [];
       const { data, error } = await supabase
         .from('connections')
+        // UPDATED: Explicitly mapping sender and receiver profiles
         .select(`
           id, sender_id, receiver_id,
-          sender:users!connections_sender_id_fkey(id, first_name, last_name, profile_photo_url, headline),
-          receiver:users!connections_receiver_id_fkey(id, first_name, last_name, profile_photo_url, headline)
+          sender:users!sender_id(id, first_name, last_name, profile_photo_url, headline),
+          receiver:users!receiver_id(id, first_name, last_name, profile_photo_url, headline)
         `)
         .eq('status', 'accepted')
         .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
+      
       if (error) throw error;
       
-      // Flatten the data so it's easy to render (grab the details of the *other* person, not you)
+      // Extract the profile of the person who ISN'T you
       return (data || []).map((conn: any) => {
         const otherPerson = conn.sender_id === currentUser.id ? conn.receiver : conn.sender;
         return { connection_id: conn.id, ...otherPerson };
@@ -65,24 +68,28 @@ export function Connections() {
     enabled: !!currentUser?.id,
   });
 
-  // --- MUTATIONS ---
+  // MUTATIONS (Added throw error so it doesn't fail silently!)
   const acceptMutation = useMutation({
     mutationFn: async (connectionId: number) => {
-      await supabase.from('connections').update({ status: 'accepted' }).eq('id', connectionId);
+      const { error } = await supabase.from('connections').update({ status: 'accepted' }).eq('id', connectionId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRequests'] });
       queryClient.invalidateQueries({ queryKey: ['myConnections'] });
+      queryClient.invalidateQueries({ queryKey: ['connections_status'] });
     }
   });
 
   const removeMutation = useMutation({
     mutationFn: async (connectionId: number) => {
-      await supabase.from('connections').delete().eq('id', connectionId);
+      const { error } = await supabase.from('connections').delete().eq('id', connectionId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRequests'] });
       queryClient.invalidateQueries({ queryKey: ['myConnections'] });
+      queryClient.invalidateQueries({ queryKey: ['connections_status'] });
     }
   });
 
@@ -95,7 +102,7 @@ export function Connections() {
           <h1 className="text-3xl font-bold text-foreground">My Network</h1>
         </div>
 
-        {/* INVITATIONS SECTION */}
+        {/* INVITATIONS */}
         {pendingRequests.length > 0 && (
           <Card className="shadow-sm border-0">
             <CardHeader className="pb-3 border-b">
@@ -131,7 +138,7 @@ export function Connections() {
           </Card>
         )}
 
-        {/* CONNECTIONS SECTION */}
+        {/* CONNECTIONS */}
         <Card className="shadow-sm border-0">
           <CardHeader className="pb-3 border-b">
             <CardTitle className="text-lg">Connections ({myConnections.length})</CardTitle>
@@ -152,7 +159,7 @@ export function Connections() {
                     <Link to={`/profile/${conn.id}`} className="flex items-center gap-3 overflow-hidden flex-1">
                       <Avatar className="h-12 w-12 border">
                         <AvatarImage src={conn.profile_photo_url} className="object-cover" />
-                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">{conn.first_name[0]}{conn.last_name[0]}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">{conn.first_name?.[0]}{conn.last_name?.[0]}</AvatarFallback>
                       </Avatar>
                       <div className="overflow-hidden">
                         <p className="font-semibold text-foreground truncate text-sm">{conn.first_name} {conn.last_name}</p>
