@@ -1,7 +1,7 @@
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus, Clock, Check } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Navigation } from "../components/Navigation";
@@ -13,8 +13,9 @@ const FALLBACK_BANNER = "https://images.unsplash.com/photo-1759889392274-246af1a
 
 export function Network() {
   const { session } = useAuth();
+  const queryClient = useQueryClient();
 
-  // 1. GET CURRENT USER ID (So we don't suggest you connect with yourself!)
+  // 1. GET CURRENT USER ID
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
@@ -35,13 +36,84 @@ export function Network() {
         .from('users')
         .select('id, first_name, last_name, profile_photo_url, banner_url, headline')
         .neq('id', currentUser.id) // Exclude the logged-in user
-        .limit(20); // Limit to 20 suggestions for now
+        .limit(20); 
       
       if (error) throw error;
       return data || [];
     },
     enabled: !!currentUser?.id,
   });
+
+  // 3. FETCH CONNECTION STATUSES
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections_status', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      const { data, error } = await supabase
+        .from('connections')
+        .select('*')
+        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentUser?.id,
+  });
+
+  // 4. CONNECT MUTATION
+  const connectMutation = useMutation({
+    mutationFn: async (receiverId: number) => {
+      if (!currentUser?.id) throw new Error("Not logged in");
+      const { error } = await supabase
+        .from('connections')
+        .insert({ sender_id: currentUser.id, receiver_id: receiverId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // Refresh the connection statuses so the button immediately changes to "Pending"
+      queryClient.invalidateQueries({ queryKey: ['connections_status'] });
+    }
+  });
+
+  // 5. HELPER: RENDER THE CORRECT BUTTON STATE
+  const renderConnectionButton = (userId: number) => {
+    const connection = connections.find((c: any) => c.sender_id === userId || c.receiver_id === userId);
+
+    if (connection?.status === 'accepted') {
+      return (
+        <Button variant="ghost" className="w-full rounded-full mt-4 gap-2 text-muted-foreground" disabled>
+          <Check className="h-4 w-4" /> Connected
+        </Button>
+      );
+    }
+    
+    if (connection?.status === 'pending') {
+      if (connection.sender_id === currentUser?.id) {
+        return (
+          <Button variant="secondary" className="w-full rounded-full mt-4 gap-2" disabled>
+            <Clock className="h-4 w-4" /> Pending
+          </Button>
+        );
+      } else {
+        return (
+          <Button className="w-full rounded-full mt-4 gap-2" asChild>
+            <Link to="/connections">Respond</Link>
+          </Button>
+        );
+      }
+    }
+
+    return (
+      <Button 
+        variant="outline" 
+        className="w-full rounded-full mt-4 gap-2 border-primary text-primary hover:bg-primary/5" 
+        onClick={() => connectMutation.mutate(userId)}
+        disabled={connectMutation.isPending}
+      >
+        <UserPlus className="h-4 w-4" />
+        Connect
+      </Button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-muted/30 pb-20 lg:pb-0">
@@ -93,12 +165,8 @@ export function Network() {
                     {user.headline || "Student"}
                   </p>
 
-                  <Button variant="outline" className="w-full rounded-full mt-4 gap-2 border-primary text-primary hover:bg-primary/5" asChild>
-                    <Link to={`/profile/${user.id}`}>
-                      <UserPlus className="h-4 w-4" />
-                      Connect
-                    </Link>
-                  </Button>
+                  {/* DYNAMIC BUTTON RENDERER INSTEAD OF STATIC LINK */}
+                  {renderConnectionButton(user.id)}
                 </CardContent>
               </Card>
             ))}
