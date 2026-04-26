@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Camera, Edit, Mail, MapPin, Pencil, Trash2, Users, UserPlus, Clock, Check } from "lucide-react";
+import { Camera, Edit, Mail, MapPin, Pencil, Trash2, Users, UserPlus, Clock, Check, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -13,20 +13,20 @@ const FALLBACK_COVER = "https://images.unsplash.com/photo-1759889392274-246af1a9
 
 interface ProfileHeaderProps {
   profile: any;
-  currentUser: any; // Added this so we know who is looking at the profile
+  currentUser: any; 
   onEditProfile: () => void;
   onAvatarClick: () => void;
   onBannerUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBannerDelete: () => void;
   isOwner: boolean; 
-  connectionStatus: any; // Added this to pass down the status
+  connectionStatus: any; 
   onToggleConnect: () => void;
+  onDisconnect: () => void; // <-- Added this prop
 }
 
-export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner, connectionStatus, onToggleConnect }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarClick, onBannerUpload, onBannerDelete, isOwner, connectionStatus, onToggleConnect, onDisconnect }: ProfileHeaderProps) {
   const [isConnectionsOpen, setIsConnectionsOpen] = useState(false);
 
-  // FETCH CONNECTIONS JUST FOR THE HEADER MODAL (UPDATED to pull from the new 'connections' table)
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ['connections', profile?.id],
     queryFn: async () => {
@@ -43,7 +43,6 @@ export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarCli
       
       if (error) throw error;
       
-      // Extract the profile of the person who ISN'T the profile owner
       return (data || []).map((conn: any) => {
         const otherPerson = conn.sender_id === profile.id ? conn.receiver : conn.sender;
         return { connection_id: conn.id, ...otherPerson };
@@ -58,7 +57,6 @@ export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarCli
         <div className="h-64 relative bg-muted">
           <img src={profile.banner_url || FALLBACK_COVER} alt="Cover" className="w-full h-full object-cover" />
 
-          {/* ONLY SHOW BANNER EDIT BUTTONS IF OWNER */}
           {isOwner && (
             <div className="absolute top-4 right-4 flex gap-2 z-10">
               <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
@@ -82,7 +80,6 @@ export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarCli
                 <AvatarFallback className="text-4xl">{profile.first_name?.[0]}{profile.last_name?.[0]}</AvatarFallback>
               </Avatar>
 
-              {/* ONLY SHOW AVATAR EDIT BUTTON IF OWNER */}
               {isOwner && (
                 <Button size="icon" variant="secondary" className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-md z-10 hover:bg-secondary/80" onClick={onAvatarClick}>
                   <Pencil className="h-4 w-4" />
@@ -90,15 +87,24 @@ export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarCli
               )}
             </div>
 
-            {/* ACTION BUTTONS */}
             <div className="pt-4 flex gap-2">
               
-              {/* DYNAMIC CONNECT BUTTON FOR VISITORS */}
               {!isOwner && (
                 <>
                   {connectionStatus?.status === 'accepted' ? (
-                    <Button variant="outline" className="gap-2 rounded-full px-6" disabled>
-                      <Check className="h-4 w-4" /> Connected
+                    <Button 
+                      variant="outline" 
+                      className="gap-2 rounded-full px-6 hover:bg-destructive/10 hover:text-destructive hover:border-destructive group transition-colors" 
+                      onClick={() => {
+                        if(confirm(`Are you sure you want to remove ${profile.first_name} from your connections?`)) {
+                          onDisconnect();
+                        }
+                      }}
+                    >
+                      <Check className="h-4 w-4 group-hover:hidden" />
+                      <X className="h-4 w-4 hidden group-hover:block" />
+                      <span className="group-hover:hidden">Connected</span>
+                      <span className="hidden group-hover:block">Disconnect</span>
                     </Button>
                   ) : connectionStatus?.status === 'pending' ? (
                     connectionStatus.sender_id === currentUser?.id ? (
@@ -115,11 +121,10 @@ export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarCli
                       <UserPlus className="h-4 w-4" /> Connect
                     </Button>
                   )}
-                  <Button variant="outline" className="rounded-full px-6 shadow-sm">Message</Button>
+                  {/* MESSAGE BUTTON HAS BEEN COMPLETELY REMOVED */}
                 </>
               )}
 
-              {/* EDIT PROFILE FOR OWNER */}
               {isOwner && (
                 <Button variant="secondary" className="gap-2 rounded-full px-6" onClick={onEditProfile}>
                   <Edit className="h-4 w-4" />Edit Profile
@@ -156,7 +161,6 @@ export function ProfileHeader({ profile, currentUser, onEditProfile, onAvatarCli
         </CardContent>
       </Card>
 
-      {/* CONNECTIONS POP-UP MODAL */}
       <Dialog open={isConnectionsOpen} onOpenChange={setIsConnectionsOpen}>
         <DialogContent className="sm:max-w-[425px] rounded-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>

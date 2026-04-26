@@ -156,7 +156,7 @@ export function Profile() {
         .select('*')
         .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${currentUser.id})`)
         .maybeSingle(); // maybeSingle prevents errors if no connection exists
-      
+
       if (error) throw error;
       return data || null;
     },
@@ -167,6 +167,15 @@ export function Profile() {
     mutationFn: async () => {
       if (!currentUser?.id || !profile?.id) return;
       await supabase.from('connections').insert({ sender_id: currentUser.id, receiver_id: profile.id });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
+  });
+
+  // --- ADD THIS NEW MUTATION ---
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      if (!connectionStatus?.id) return;
+      await supabase.from('connections').delete().eq('id', connectionStatus.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
@@ -316,15 +325,16 @@ export function Profile() {
 
         {/* 1. HEADER */}
         <ProfileHeader
-          profile={profile} 
-          currentUser={currentUser} 
-          connectionStatus={connectionStatus} 
+          profile={profile}
+          currentUser={currentUser}
+          connectionStatus={connectionStatus}
           isOwner={isOwner}
           onEditProfile={openEditProfile}
           onAvatarClick={() => { if (avatarInputRef.current) avatarInputRef.current.click(); }}
           onBannerUpload={handleBannerUpload}
           onBannerDelete={() => deleteBannerMutation.mutate()}
-          onToggleConnect={() => connectMutation.mutate()} 
+          onToggleConnect={() => connectMutation.mutate()}
+          onDisconnect={() => disconnectMutation.mutate()} // <-- ADD THIS LINE
         />
 
         {/* 2. ABOUT & SKILLS */}
