@@ -12,7 +12,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
-import { X, Image as ImageIcon, Trash2 } from "lucide-react";
+import { X, Image as ImageIcon, Trash2, ExternalLink } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { useParams } from "react-router-dom";
 
@@ -159,7 +159,7 @@ export function Profile() {
         `)
         .eq('organizations.owner_id', profile.id)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -395,7 +395,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* NEW: POSTED OPPORTUNITIES */}
+        {/* POSTED OPPORTUNITIES (Hiring Section) */}
         {profileOpportunities.length > 0 && (
           <Card className="shadow-sm border-0">
             <CardHeader>
@@ -403,32 +403,57 @@ export function Profile() {
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-2 gap-4">
-                {profileOpportunities.map((job: any) => (
-                  <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <Avatar className="h-10 w-10 border bg-white rounded-md">
-                          <AvatarImage src={job.organizations?.logo_url} className="object-contain p-1" />
-                        </Avatar>
-                        <div>
-                          <h4 className="font-semibold text-foreground line-clamp-1 leading-tight">{job.title}</h4>
-                          <p className="text-xs text-muted-foreground">{job.organizations?.name}</p>
+                {profileOpportunities.map((job: any) => {
+                  const avatarUrl = job.organizations?.logo_url || "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=400&fit=crop&q=80";
+
+                  return (
+                    <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between relative group">
+
+                      {/* Delete Button (Only visible if owner hovers) */}
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            if (window.confirm("Are you sure you want to delete this opportunity?")) {
+                              supabase.from('opportunities').delete().eq('id', job.id).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['profileOpportunities'] });
+                                queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+                              });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+
+                      <div>
+                        <div className="flex items-center gap-3 mb-3 pr-8">
+                          <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
+                            <AvatarImage src={avatarUrl} className="object-cover" />
+                          </Avatar>
+                          <div className="overflow-hidden">
+                            <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
+                            <p className="text-xs text-muted-foreground truncate">{job.organizations?.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
+                          <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
+                          {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
                         </div>
                       </div>
-                      <div className="flex gap-2 text-xs text-muted-foreground mb-4">
-                        <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
-                        {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
-                      </div>
+
+                      {job.application_url && (
+                        <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
+                          <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
+                            Apply <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      )}
                     </div>
-                    {job.application_url && (
-                      <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
-                        <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
-                          Apply
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
