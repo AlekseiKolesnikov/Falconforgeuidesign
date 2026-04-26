@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { Navigation } from "../components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Avatar, AvatarImage } from "../components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
@@ -12,7 +12,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
-import { X, Image as ImageIcon, Trash2, ExternalLink } from "lucide-react";
+import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { useParams } from "react-router-dom";
 
@@ -42,8 +42,6 @@ interface ProfileData {
   swimmer?: boolean;
   created_at?: string;
 }
-
-const FALLBACK_COVER = "https://images.unsplash.com/photo-1759889392274-246af1a984ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx1bml2ZXJzaXR5JTIwY2FtcHVzJTIwcHVycGxlJTIwYnVpbGRpbmd8ZW58MXx8fHwxNzczMDAwMjgyfDA&ixlib=rb-4.1.0&q=80&w=1080";
 
 const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob> => {
   const image = new Image();
@@ -92,6 +90,13 @@ export function Profile() {
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostImage, setNewPostImage] = useState<File | null>(null);
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
+
+  // OPPORTUNITY EDIT STATE
+  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+  const [editingJobId, setEditingJobId] = useState<number | null>(null);
+  const [jobFormData, setJobFormData] = useState({
+    organization_id: "", title: "", employment_type: "Internship", location: "", application_url: "", description: ""
+  });
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -146,27 +151,35 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
-  // FETCH OPPORTUNITIES POSTED BY THIS USER'S ORGANIZATIONS
+  // FETCH ORGANIZATIONS OWNED BY LOGGED IN USER (For the Job Edit Dropdown)
+  const { data: myOrganizations = [] } = useQuery({
+    queryKey: ['myOwnedOrganizations', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      const { data } = await supabase.from('organizations').select('id, name, logo_url').eq('owner_id', currentUser.id);
+      return data || [];
+    },
+    enabled: !!currentUser?.id,
+  });
+
+  // FETCH OPPORTUNITIES POSTED BY THIS USER
   const { data: profileOpportunities = [] } = useQuery({
     queryKey: ['profileOpportunities', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return [];
       const { data, error } = await supabase
         .from('opportunities')
-        .select(`
-          *,
-          organizations!inner(id, name, logo_url, owner_id)
-        `)
+        .select(`*, organizations!inner(id, name, logo_url, owner_id)`)
         .eq('organizations.owner_id', profile.id)
         .order('created_at', { ascending: false });
-
+      
       if (error) throw error;
       return data || [];
     },
     enabled: !!profile?.id,
   });
 
-  // --- NEW CONNECTION QUERY & MUTATION ---
+  // --- CONNECTIONS ---
   const { data: connectionStatus } = useQuery({
     queryKey: ['connection', currentUser?.id, profile?.id],
     queryFn: async () => {
@@ -175,8 +188,7 @@ export function Profile() {
         .from('connections')
         .select('*')
         .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${currentUser.id})`)
-        .maybeSingle(); // maybeSingle prevents errors if no connection exists
-
+        .maybeSingle(); 
       if (error) throw error;
       return data || null;
     },
@@ -191,7 +203,6 @@ export function Profile() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
 
-  // --- ADD THIS NEW MUTATION ---
   const disconnectMutation = useMutation({
     mutationFn: async () => {
       if (!connectionStatus?.id) return;
@@ -199,6 +210,43 @@ export function Profile() {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
+
+  // --- JOB POSTING MUTATION ---
+  const saveJobMutation = useMutation({
+    mutationFn: async () => {
+      if (!jobFormData.organization_id || !jobFormData.title) throw new Error("Missing required fields");
+      const jobData = {
+        organization_id: parseInt(jobFormData.organization_id),
+        title: jobFormData.title.trim(),
+        employment_type: jobFormData.employment_type,
+        location: jobFormData.location.trim() || null,
+        application_url: jobFormData.application_url.trim() || null,
+        description: jobFormData.description.trim() || null
+      };
+      if (editingJobId) {
+        await supabase.from('opportunities').update(jobData).eq('id', editingJobId);
+      }
+    },
+    onSuccess: () => {
+      setIsJobModalOpen(false);
+      setEditingJobId(null);
+      queryClient.invalidateQueries({ queryKey: ['profileOpportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+    }
+  });
+
+  const openJobModalForEdit = (job: any) => {
+    setEditingJobId(job.id);
+    setJobFormData({
+      organization_id: job.organization_id.toString(),
+      title: job.title,
+      employment_type: job.employment_type || "Internship",
+      location: job.location || "",
+      application_url: job.application_url || "",
+      description: job.description || ""
+    });
+    setIsJobModalOpen(true);
+  };
 
   // --- PROFILE MUTATIONS ---
   const updateProfileMutation = useMutation({
@@ -305,7 +353,6 @@ export function Profile() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userPosts', profile?.id] })
   });
 
-  // --- SKILL MUTATIONS ---
   const addSkillMutation = useMutation({
     mutationFn: async (skillName: string) => {
       if (!profile?.id || !skillName.trim()) return;
@@ -340,24 +387,21 @@ export function Profile() {
 
       <div className="container max-w-4xl mx-auto px-4 py-6 space-y-6">
 
-        {/* Hidden input to handle the avatar upload click from ProfileHeader */}
         <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarSelect} />
 
-        {/* 1. HEADER */}
         <ProfileHeader
-          profile={profile}
-          currentUser={currentUser}
-          connectionStatus={connectionStatus}
+          profile={profile} 
+          currentUser={currentUser} 
+          connectionStatus={connectionStatus} 
           isOwner={isOwner}
           onEditProfile={openEditProfile}
           onAvatarClick={() => { if (avatarInputRef.current) avatarInputRef.current.click(); }}
           onBannerUpload={handleBannerUpload}
           onBannerDelete={() => deleteBannerMutation.mutate()}
-          onToggleConnect={() => connectMutation.mutate()}
-          onDisconnect={() => disconnectMutation.mutate()} // <-- ADD THIS LINE
+          onToggleConnect={() => connectMutation.mutate()} 
+          onDisconnect={() => disconnectMutation.mutate()} 
         />
 
-        {/* 2. ABOUT & SKILLS */}
         <ProfileAbout
           bio={profile.bio || ""}
           skills={skills}
@@ -365,7 +409,6 @@ export function Profile() {
           onEditProfile={openEditProfile}
         />
 
-        {/* 3. ACTIVITY */}
         <Card className="shadow-sm border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -403,63 +446,62 @@ export function Profile() {
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-2 gap-4">
-                {profileOpportunities.map((job: any) => {
-                  const avatarUrl = job.organizations?.logo_url || "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=400&fit=crop&q=80";
-
-                  return (
-                    <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between relative group">
-
-                      {/* Delete Button (Only visible if owner hovers) */}
-                      {isOwner && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute top-2 right-2 h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => {
-                            if (window.confirm("Are you sure you want to delete this opportunity?")) {
-                              supabase.from('opportunities').delete().eq('id', job.id).then(() => {
-                                queryClient.invalidateQueries({ queryKey: ['profileOpportunities'] });
-                                queryClient.invalidateQueries({ queryKey: ['opportunities'] });
-                              });
-                            }
-                          }}
-                        >
+                {profileOpportunities.map((job: any) => (
+                  <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between relative group">
+                    
+                    {/* Hover Options: Edit & Delete */}
+                    {isOwner && (
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => openJobModalForEdit(job)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => {
+                          if(window.confirm("Are you sure you want to delete this opportunity?")) {
+                            supabase.from('opportunities').delete().eq('id', job.id).then(() => {
+                              queryClient.invalidateQueries({ queryKey: ['profileOpportunities'] });
+                              queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+                            });
+                          }
+                        }}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
+                      </div>
+                    )}
 
-                      <div>
-                        <div className="flex items-center gap-3 mb-3 pr-8">
-                          <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
-                            <AvatarImage src={avatarUrl} className="object-cover" />
-                          </Avatar>
-                          <div className="overflow-hidden">
-                            <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
-                            <p className="text-xs text-muted-foreground truncate">{job.organizations?.name}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
-                          <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
-                          {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
+                    <div>
+                      <div className="flex items-center gap-3 mb-3 pr-16">
+                        {/* NEUTRAL PLACEHOLDER AVATAR */}
+                        <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
+                          <AvatarImage src={job.organizations?.logo_url || undefined} className="object-contain p-1" />
+                          <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
+                            <Building2 className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="overflow-hidden">
+                          <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
+                          <p className="text-xs text-muted-foreground truncate">{job.organizations?.name}</p>
                         </div>
                       </div>
-
-                      {job.application_url && (
-                        <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
-                          <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
-                            Apply <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </Button>
-                      )}
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
+                        <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
+                        {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
+                      </div>
                     </div>
-                  );
-                })}
+                    
+                    {job.application_url && (
+                      <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
+                        <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
+                          Apply <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* 4. EXPERIENCE */}
         <ProfileExperience
           experiences={experiences}
           userId={profile.id}
@@ -467,7 +509,6 @@ export function Profile() {
           onRefresh={fetchProfile}
         />
 
-        {/* 5. EDUCATION */}
         <ProfileEducation
           education={education}
           userId={profile.id}
@@ -477,6 +518,57 @@ export function Profile() {
       </div>
 
       {/* ----------------- MODALS ----------------- */}
+
+      {/* MODAL: EDIT OPPORTUNITY (From Profile) */}
+      {isOwner && (
+        <Dialog open={isJobModalOpen} onOpenChange={setIsJobModalOpen}>
+          <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="text-xl">Edit Opportunity</DialogTitle></DialogHeader>
+            <div className="grid gap-4 py-4">
+              {myOrganizations.length > 1 && (
+                <div className="space-y-2">
+                  <Label>Posting as <span className="text-destructive">*</span></Label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={jobFormData.organization_id} onChange={(e) => setJobFormData({...jobFormData, organization_id: e.target.value})}>
+                    {myOrganizations.map((org: any) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Job Title <span className="text-destructive">*</span></Label>
+                <Input placeholder="e.g. Graphic Design Intern" value={jobFormData.title} onChange={(e) => setJobFormData({ ...jobFormData, title: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employment Type</Label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={jobFormData.employment_type} onChange={(e) => setJobFormData({...jobFormData, employment_type: e.target.value})}>
+                    <option value="Internship">Internship</option>
+                    <option value="Full-time">Full-time</option>
+                    <option value="Part-time">Part-time</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input placeholder="e.g. Remote, or Montevallo, AL" value={jobFormData.location} onChange={(e) => setJobFormData({ ...jobFormData, location: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Application Link (External URL)</Label>
+                <Input placeholder="https://..." value={jobFormData.application_url} onChange={(e) => setJobFormData({ ...jobFormData, application_url: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea placeholder="Briefly describe the role and requirements..." className="min-h-[100px]" value={jobFormData.description} onChange={(e) => setJobFormData({ ...jobFormData, description: e.target.value })} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="rounded-full px-6" onClick={() => setIsJobModalOpen(false)}>Cancel</Button>
+              <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!jobFormData.title.trim() || !jobFormData.organization_id || saveJobMutation.isPending}>
+                {saveJobMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* MODAL: EDIT PROFILE WITH SKILLS INCLUDED */}
       {isOwner && (
@@ -493,7 +585,6 @@ export function Profile() {
               <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Montevallo, Alabama" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
               <div className="space-y-2"><Label>Bio</Label><Textarea className="min-h-[100px]" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} /></div>
 
-              {/* SKILLS SECTION INSIDE EDIT PROFILE */}
               <div className="space-y-2 pt-4 border-t">
                 <Label>Manage Skills</Label>
                 <div className="flex flex-wrap gap-2 mb-2 border rounded-md p-3 min-h-[50px] bg-muted/20">
