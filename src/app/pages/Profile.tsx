@@ -146,6 +146,26 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
+  // FETCH OPPORTUNITIES POSTED BY THIS USER'S ORGANIZATIONS
+  const { data: profileOpportunities = [] } = useQuery({
+    queryKey: ['profileOpportunities', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return [];
+      const { data, error } = await supabase
+        .from('opportunities')
+        .select(`
+          *,
+          organizations!inner(id, name, logo_url, owner_id)
+        `)
+        .eq('organizations.owner_id', profile.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!profile?.id,
+  });
+
   // --- NEW CONNECTION QUERY & MUTATION ---
   const { data: connectionStatus } = useQuery({
     queryKey: ['connection', currentUser?.id, profile?.id],
@@ -374,6 +394,45 @@ export function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        {/* NEW: POSTED OPPORTUNITIES */}
+        {profileOpportunities.length > 0 && (
+          <Card className="shadow-sm border-0">
+            <CardHeader>
+              <CardTitle className="text-xl">Hiring</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {profileOpportunities.map((job: any) => (
+                  <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <Avatar className="h-10 w-10 border bg-white rounded-md">
+                          <AvatarImage src={job.organizations?.logo_url} className="object-contain p-1" />
+                        </Avatar>
+                        <div>
+                          <h4 className="font-semibold text-foreground line-clamp-1 leading-tight">{job.title}</h4>
+                          <p className="text-xs text-muted-foreground">{job.organizations?.name}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 text-xs text-muted-foreground mb-4">
+                        <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
+                        {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
+                      </div>
+                    </div>
+                    {job.application_url && (
+                      <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
+                        <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
+                          Apply
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 4. EXPERIENCE */}
         <ProfileExperience
