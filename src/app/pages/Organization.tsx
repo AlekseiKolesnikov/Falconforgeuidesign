@@ -2,13 +2,14 @@ import * as React from "react";
 import { useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Building2, MapPin, Link as LinkIcon, Users, ExternalLink, Camera, Edit, Trash2, X, Image as ImageIcon } from "lucide-react";
+import { Building2, MapPin, Link as LinkIcon, Users, ExternalLink, Camera, Edit, Trash2, X, Image as ImageIcon, Pencil, Briefcase, Clock, MoreHorizontal } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Navigation } from "../components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "../components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
@@ -35,7 +36,14 @@ export function Organization() {
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. GET CURRENT USER (FIXED: Now fetches first_name, last_name, and photo so PostCard doesn't crash!)
+  // Job Opportunity states
+  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+  const [editingJobId, setEditingJobId] = useState<number | null>(null);
+  const [jobFormData, setJobFormData] = useState({
+    title: "", employment_type: "Internship", location: "", application_url: "", description: ""
+  });
+
+  // 1. GET CURRENT USER
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
@@ -91,6 +99,22 @@ export function Organization() {
     enabled: !!id,
   });
 
+  // 5. GET ORGANIZATION OPPORTUNITIES
+  const { data: orgOpportunities = [] } = useQuery({
+    queryKey: ['organization_opportunities', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from('opportunities')
+        .select(`*, organizations (id, name, logo_url)`)
+        .eq('organization_id', id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const isOwner = currentUser?.id === org?.owner_id;
 
   // --- ORGANIZATION MUTATIONS ---
@@ -124,6 +148,51 @@ export function Organization() {
       setEditForm({ name: org.name || "", industry: org.industry || "", location: org.location || "", about: org.about || "", website_url: org.website_url || "" });
       setIsEditModalOpen(true);
     }
+  };
+
+  // --- JOB MUTATIONS ---
+  const saveJobMutation = useMutation({
+    mutationFn: async () => {
+      if (!jobFormData.title) throw new Error("Missing title");
+      const jobData = {
+        organization_id: parseInt(id!),
+        title: jobFormData.title.trim(),
+        employment_type: jobFormData.employment_type,
+        location: jobFormData.location.trim() || null,
+        application_url: jobFormData.application_url.trim() || null,
+        description: jobFormData.description.trim() || null
+      };
+
+      if (editingJobId) {
+        await supabase.from('opportunities').update(jobData).eq('id', editingJobId);
+      } else {
+        await supabase.from('opportunities').insert([jobData]);
+      }
+    },
+    onSuccess: () => {
+      setIsJobModalOpen(false);
+      setEditingJobId(null);
+      queryClient.invalidateQueries({ queryKey: ['organization_opportunities', id] });
+      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+    }
+  });
+
+  const openJobModalForEdit = (job: any) => {
+    setEditingJobId(job.id);
+    setJobFormData({
+      title: job.title,
+      employment_type: job.employment_type || "Internship",
+      location: job.location || "",
+      application_url: job.application_url || "",
+      description: job.description || ""
+    });
+    setIsJobModalOpen(true);
+  };
+
+  const openJobModalForCreate = () => {
+    setEditingJobId(null);
+    setJobFormData({ title: "", employment_type: "Internship", location: "", application_url: "", description: "" });
+    setIsJobModalOpen(true);
   };
 
   // --- POST MUTATIONS ---
@@ -177,7 +246,6 @@ export function Organization() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization_posts', id] })
   });
 
-  // FORMAT POSTS (FIXED: Added a space to last_name so PostCard AvatarFallback doesn't crash on an empty string)
   const formattedOrgPosts = orgPosts.map((post: any) => ({
     ...post,
     users: {
@@ -251,6 +319,78 @@ export function Organization() {
           </CardHeader>
           <CardContent><p className="text-foreground leading-relaxed whitespace-pre-wrap">{org.about || `No description provided for ${org.name} yet.`}</p></CardContent>
         </Card>
+
+        {/* HIRING SECTION */}
+        {(orgOpportunities.length > 0 || isOwner) && (
+          <Card className="shadow-sm border-0">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-xl">Hiring</CardTitle>
+              {isOwner && (
+                <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={openJobModalForCreate}>
+                  Post a job
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {orgOpportunities.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No open opportunities right now.</p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {orgOpportunities.map((job: any) => (
+                    <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between relative group">
+                      
+                      {/* Hover Options: Edit & Delete */}
+                      {isOwner && (
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => openJobModalForEdit(job)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => {
+                            if(window.confirm("Are you sure you want to delete this opportunity?")) {
+                              supabase.from('opportunities').delete().eq('id', job.id).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['organization_opportunities', id] });
+                                queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+                              });
+                            }
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="flex items-center gap-3 mb-3 pr-16">
+                          <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
+                            <AvatarImage src={job.organizations?.logo_url} className="object-contain p-1" />
+                            <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
+                              <Building2 className="h-5 w-5" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="overflow-hidden">
+                            <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
+                            <p className="text-xs text-muted-foreground truncate">{job.organizations?.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
+                          <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
+                          {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
+                        </div>
+                      </div>
+                      
+                      {job.application_url && (
+                        <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
+                          <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
+                            Apply <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* ACTIVITY / POSTS SECTION */}
         <Card className="shadow-sm border-0">
@@ -331,6 +471,50 @@ export function Organization() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: EDIT/CREATE OPPORTUNITY */}
+      {isOwner && (
+        <Dialog open={isJobModalOpen} onOpenChange={setIsJobModalOpen}>
+          <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="text-xl">{editingJobId ? "Edit Opportunity" : "Post an Opportunity"}</DialogTitle></DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Job Title <span className="text-destructive">*</span></Label>
+                <Input placeholder="e.g. Graphic Design Intern" value={jobFormData.title} onChange={(e) => setJobFormData({ ...jobFormData, title: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employment Type</Label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={jobFormData.employment_type} onChange={(e) => setJobFormData({...jobFormData, employment_type: e.target.value})}>
+                    <option value="Internship">Internship</option>
+                    <option value="Full-time">Full-time</option>
+                    <option value="Part-time">Part-time</option>
+                    <option value="Volunteer">Volunteer</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input placeholder="e.g. Remote, or Montevallo, AL" value={jobFormData.location} onChange={(e) => setJobFormData({ ...jobFormData, location: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Application Link (External URL)</Label>
+                <Input placeholder="https://..." value={jobFormData.application_url} onChange={(e) => setJobFormData({ ...jobFormData, application_url: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea placeholder="Briefly describe the role and requirements..." className="min-h-[100px]" value={jobFormData.description} onChange={(e) => setJobFormData({ ...jobFormData, description: e.target.value })} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="rounded-full px-6" onClick={() => setIsJobModalOpen(false)}>Cancel</Button>
+              <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!jobFormData.title.trim() || saveJobMutation.isPending}>
+                {saveJobMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* CREATE POST MODAL */}
       <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
