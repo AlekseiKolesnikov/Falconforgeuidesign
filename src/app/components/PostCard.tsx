@@ -1,284 +1,164 @@
 import * as React from "react";
-import { useState } from "react";
-import { Card, CardHeader, CardContent, CardFooter } from "./ui/card";
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal, Pencil, Trash2, Heart, MessageCircle, Share2, Check, Bookmark } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
+import { Card, CardContent, CardFooter, CardHeader } from "./ui/card";
 import { Textarea } from "./ui/textarea";
-import { Input } from "./ui/input";
-import { Separator } from "./ui/separator";
-import { Link } from "react-router-dom";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./ui/alert-dialog";
-import { MoreHorizontal, Pencil, Trash2, ThumbsUp, MessageCircle, Send } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+
+const FALLBACK_AVATAR = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&h=400&fit=crop&q=80";
 
 interface PostCardProps {
   post: any;
   currentUser: any;
-  onUpdate: (postId: number, newContent: string) => void;
-  onDelete: (post: any) => void;
+  hideAuthor?: boolean; 
+  onUpdate?: (postId: number, content: string) => void;
+  onDelete?: (postId: number) => void;
   isUpdating?: boolean;
-  onToggleLike?: (postId: number, hasLiked: boolean) => void;
-  onCreateComment?: (postId: number, text: string) => void;
-  hideAuthor?: boolean; // <-- Added this new prop
 }
 
-export function PostCard({ post, currentUser, onUpdate, onDelete, isUpdating, onToggleLike, onCreateComment, hideAuthor }: PostCardProps) {
+export function PostCard({ post, currentUser, hideAuthor = false, onUpdate, onDelete, isUpdating }: PostCardProps) {
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(post.content || "");
-  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
-  const [showComments, setShowComments] = useState(false);
-  const [commentInput, setCommentInput] = useState("");
+  const [editContent, setEditContent] = useState(post.content);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const isOwner = currentUser?.id === post.user_id;
+  const avatarUrl = post.users?.profile_photo_url || FALLBACK_AVATAR;
+  const initials = post.users ? `${post.users.first_name?.[0] || ""}${post.users.last_name?.[0] || ""}` : "U";
+
+  const formattedDate = post.created_at 
+    ? new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : "Just now";
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleSave = () => {
-    onUpdate(post.id, editContent);
+    if (onUpdate && editContent.trim() !== post.content) {
+      onUpdate(post.id, editContent);
+    }
     setIsEditing(false);
   };
 
-  const handleCommentSubmit = () => {
-    if (commentInput.trim() && onCreateComment) {
-      onCreateComment(post.id, commentInput);
-      setCommentInput("");
+  // --- SAVED POSTS LOGIC ---
+  const { data: isSaved = false } = useQuery({
+    queryKey: ['isSaved', post.id, currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id || !post.id) return false;
+      const { data } = await supabase
+        .from('saved_posts')
+        .select('id')
+        .eq('post_id', post.id)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!currentUser?.id && !!post.id,
+  });
+
+  const toggleSaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser?.id || !post.id) return;
+      if (isSaved) {
+        await supabase.from('saved_posts').delete().eq('post_id', post.id).eq('user_id', currentUser.id);
+      } else {
+        await supabase.from('saved_posts').insert({ post_id: post.id, user_id: currentUser.id });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['isSaved', post.id] });
+      queryClient.invalidateQueries({ queryKey: ['savedItems'] }); // Refreshes the saved page!
     }
-  };
-
-  const isOwner = currentUser?.id === post.user_id;
-  const user = post.users; // The author of the post
-  const postDate = new Date(post.created_at).toLocaleDateString();
-
-  const likeCount = post.post_likes?.length || 0;
-  const hasLiked = post.post_likes?.some((like: any) => like.user_id === currentUser?.id);
+  });
 
   return (
-    <>
-      <Card className="shadow-sm border-0 overflow-hidden">
-        {/* POST HEADER (Avatar & Name) */}
-        <CardHeader className={hideAuthor ? "p-4 pb-0" : "pb-3 pt-5"}>
-          <div className="flex items-start justify-between w-full gap-4">
-            
-            {/* LEFT SIDE: Author Info */}
-            {!hideAuthor ? (
-              <div className="flex items-center gap-3 overflow-hidden">
-                {user && (
-                  <Link to={`/profile/${user.id}`} className="cursor-pointer hover:opacity-80 transition-opacity shrink-0">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={user.profile_photo_url} className="object-cover" />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {user.first_name?.[0]}{user.last_name?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Link>
-                )}
-                
-                <div className="overflow-hidden">
-                  {user ? (
-                    <Link to={`/profile/${user.id}`} className="hover:underline cursor-pointer">
-                      <h3 className="font-semibold text-base text-foreground leading-none truncate">
-                        {user.first_name} {user.last_name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1 truncate">
-                        {user.headline || 'Student'}
-                      </p>
-                    </Link>
-                  ) : (
-                    <h3 className="font-semibold text-base text-foreground leading-none">Unknown User</h3>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div /> // Empty spacer if author is hidden
-            )}
-
-            {/* RIGHT SIDE: Date & 3-Dot Menu */}
-            <div className="flex items-center gap-3 shrink-0 ml-auto">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {postDate}
-              </span>
-
-              {isOwner && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40 z-50 bg-popover text-popover-foreground border shadow-md">
-                    <DropdownMenuItem
-                      className="cursor-pointer flex items-center p-2 outline-none"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setIsEditing(true);
-                        setEditContent(post.content || '');
-                      }}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      <span>Edit Post</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center p-2 outline-none"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setShowDeleteAlert(true);
-                      }}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      <span>Delete Post</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+    <Card className="mb-4 shadow-sm border border-border bg-card relative overflow-visible">
+      {isOwner && (
+        <div className="absolute top-3 right-3 z-20" ref={menuRef}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted" onClick={() => setShowMenu(!showMenu)}>
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+          {showMenu && (
+            <div className="absolute right-0 top-full mt-1 w-36 bg-card border border-border rounded-xl shadow-lg overflow-hidden animate-in fade-in zoom-in-95">
+              <button className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors" onClick={() => { setIsEditing(true); setShowMenu(false); }}>
+                <Pencil className="h-4 w-4" /> Edit Post
+              </button>
+              <button className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors" onClick={() => { if(window.confirm("Are you sure you want to delete this post?")) { onDelete?.(post.id); } setShowMenu(false); }}>
+                <Trash2 className="h-4 w-4" /> Delete
+              </button>
             </div>
-            
+          )}
+        </div>
+      )}
+
+      {!hideAuthor && (
+        <CardHeader className="p-4 pb-2 flex flex-row items-start gap-3">
+          <Avatar className="h-10 w-10 border bg-white shrink-0">
+            <AvatarImage src={avatarUrl} className="object-cover" />
+            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 pr-10">
+            <p className="font-semibold text-sm text-foreground leading-tight">{post.users?.first_name} {post.users?.last_name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{post.users?.headline || "Student"} • {formattedDate}</p>
           </div>
         </CardHeader>
+      )}
 
-        {/* POST CONTENT */}
-        <CardContent className="pt-1 pb-4">
-          {isEditing ? (
-            <div className="space-y-3 mb-3 mt-2">
-              <Textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="min-h-[100px] resize-none focus-visible:ring-1 bg-background"
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setIsEditing(false)}>
-                  Cancel
-                </Button>
-                <Button size="sm" className="rounded-full" onClick={handleSave} disabled={isUpdating || !editContent.trim()}>
-                  {isUpdating ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
+      <CardContent className={`p-4 ${!hideAuthor ? 'pt-2' : ''}`}>
+        {isEditing ? (
+          <div className="space-y-3 mt-4">
+            <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="min-h-[100px] text-sm focus-visible:ring-1" autoFocus />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setIsEditing(false); setEditContent(post.content); }}>Cancel</Button>
+              <Button size="sm" className="rounded-full gap-1" onClick={handleSave} disabled={isUpdating}><Check className="h-4 w-4" /> {isUpdating ? "Saving..." : "Save"}</Button>
             </div>
-          ) : (
-            post.content && (
-              <p className="whitespace-pre-wrap text-foreground text-[15px] leading-relaxed mb-3 mt-2">
-                {post.content}
-              </p>
-            )
-          )}
-
-          {post.image_url && (
-            <div className="mt-3 aspect-auto overflow-hidden rounded-xl border border-border">
-              <img src={post.image_url} alt="Post attachment" className="w-full h-auto max-h-[500px] object-contain" loading="lazy" />
-            </div>
-          )}
-
-          {post.hashtags?.length > 0 && (
-            <div className="flex gap-2 mt-4 flex-wrap">
-              {post.hashtags.map((tag: string) => (
-                <Badge key={tag} variant="secondary" className="cursor-pointer hover:bg-secondary/80 text-blue-600 bg-blue-50 border-0">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-
-        {/* LIKES & COMMENTS FOOTER */}
-        {(onToggleLike || onCreateComment) && (
-          <>
-            <Separator />
-            <CardFooter className="py-2 px-2 flex gap-1 bg-card">
-              {onToggleLike && (
-                <Button
-                  variant="ghost" size="sm"
-                  onClick={() => onToggleLike(post.id, hasLiked)}
-                  className={`flex-1 sm:flex-none transition-colors ${hasLiked ? 'text-blue-600 font-semibold hover:text-blue-700 hover:bg-blue-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                >
-                  <ThumbsUp className={`h-4 w-4 mr-2 ${hasLiked ? 'fill-current' : ''}`} />
-                  {likeCount > 0 ? likeCount : 'Like'}
-                </Button>
-              )}
-              {onCreateComment && (
-                <Button
-                  variant="ghost" size="sm"
-                  onClick={() => setShowComments(!showComments)}
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted flex-1 sm:flex-none"
-                >
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  {post.post_comments?.length > 0 ? post.post_comments.length : 'Comment'}
-                </Button>
-              )}
-            </CardFooter>
-
-            {/* EXPANDED COMMENTS */}
-            {showComments && onCreateComment && (
-              <div className="px-4 pb-4 pt-2 bg-muted/20 border-t border-border">
-                <div className="space-y-4 mb-4 mt-2">
-                  {post.post_comments?.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-2">No comments yet. Be the first to reply!</p>
-                  ) : (
-                    post.post_comments?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((comment: any) => (
-                      <div key={comment.id} className="flex gap-3">
-                        <Avatar className="w-8 h-8 shrink-0">
-                          <AvatarImage src={comment.users?.profile_photo_url} className="object-cover" />
-                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">{comment.users?.first_name?.[0]}{comment.users?.last_name?.[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 bg-background border shadow-sm rounded-lg p-3 text-sm">
-                          <div className="font-semibold text-foreground mb-1">
-                            {comment.users?.first_name} {comment.users?.last_name}
-                            <span className="text-xs text-muted-foreground font-normal ml-2">{new Date(comment.created_at).toLocaleDateString()}</span>
-                          </div>
-                          <p className="text-foreground whitespace-pre-wrap">{comment.content_text}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="flex gap-2 items-center">
-                  <Avatar className="w-8 h-8 shrink-0 hidden sm:block">
-                    <AvatarImage src={currentUser?.profile_photo_url} className="object-cover" />
-                    <AvatarFallback className="text-xs bg-primary text-primary-foreground">{currentUser?.first_name?.[0]}{currentUser?.last_name?.[0]}</AvatarFallback>
-                  </Avatar>
-                  <Input
-                    value={commentInput}
-                    onChange={(e) => setCommentInput(e.target.value)}
-                    placeholder="Write a comment..."
-                    className="flex-1 bg-background"
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleCommentSubmit(); }}
-                  />
-                  <Button size="icon" className="shrink-0 rounded-full" disabled={!commentInput.trim()} onClick={handleCommentSubmit}>
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
+          </div>
+        ) : (
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed pr-8">{post.content}</p>
+            {post.image_url && (
+              <div className="rounded-xl overflow-hidden border">
+                <img src={post.image_url} alt="Post attachment" className="w-full h-auto object-cover max-h-[400px]" />
               </div>
             )}
-          </>
+          </div>
         )}
-      </Card>
+      </CardContent>
 
-      {/* ISOLATED ALERT DIALOG */}
-      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. This will permanently delete your post.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => { onDelete(post); setShowDeleteAlert(false); }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+      <CardFooter className="p-2 px-4 border-t border-border flex justify-between">
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" className="text-muted-foreground gap-2 rounded-full hover:text-primary hover:bg-primary/5">
+            <Heart className="h-4 w-4" /> <span>Like</span>
+          </Button>
+          <Button variant="ghost" size="sm" className="text-muted-foreground gap-2 rounded-full hover:text-primary hover:bg-primary/5">
+            <MessageCircle className="h-4 w-4" /> <span>Comment</span>
+          </Button>
+          <Button variant="ghost" size="sm" className="text-muted-foreground gap-2 rounded-full hover:text-primary hover:bg-primary/5">
+            <Share2 className="h-4 w-4" /> <span className="hidden sm:inline">Share</span>
+          </Button>
+        </div>
+        
+        {/* NEW BOOKMARK BUTTON */}
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className={`rounded-full hover:bg-primary/5 ${isSaved ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+          onClick={() => toggleSaveMutation.mutate()}
+        >
+          <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
