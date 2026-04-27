@@ -14,7 +14,7 @@ export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
+
   // SEARCH STATES
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -54,7 +54,7 @@ export function Navigation() {
     queryKey: ['userSearch', searchQuery],
     queryFn: async () => {
       if (searchQuery.trim().length < 2) return [];
-      
+
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, profile_photo_url, headline')
@@ -81,7 +81,7 @@ export function Navigation() {
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false })
         .limit(20);
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -124,7 +124,7 @@ export function Navigation() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
       <div className="container max-w-7xl mx-auto h-16 px-4 flex items-center justify-between gap-4">
-        
+
         {/* 1. LEFT SECTION (Logo & Search) */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <Link to="/feed" className="flex items-center gap-2 font-bold text-lg text-foreground hover:opacity-90 shrink-0">
@@ -133,19 +133,25 @@ export function Navigation() {
             </div>
             <span className="hidden xl:block text-xl tracking-tight">Falcon Forge</span>
           </Link>
-          
+
           <div className="relative hidden md:block max-w-[280px] w-full" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-            <Input 
-              type="search" 
-              placeholder="Search people..." 
+            <Input
+              type="search"
+              placeholder="Search Falcon Forge..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9" 
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim().length > 0) {
+                  setIsSearchOpen(false);
+                  navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                }
+              }}
+              className="w-full bg-muted/50 pl-9 rounded-md border-0 focus-visible:ring-1 h-9"
             />
 
             {isSearchOpen && searchQuery.trim().length >= 2 && (
@@ -193,17 +199,17 @@ export function Navigation() {
             <Home className="h-5 w-5" />
             <span className="hidden lg:inline-block">Feed</span>
           </Link>
-          
+
           <Link to="/network" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/network') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Users className="h-5 w-5" />
             <span className="hidden lg:inline-block">Network</span>
           </Link>
-          
+
           <Link to="/opportunities" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/opportunities') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Briefcase className="h-5 w-5" />
             <span className="hidden lg:inline-block">Opportunities</span>
           </Link>
-          
+
           <Link to="/events" className={`flex items-center gap-2 px-3 lg:px-4 h-full border-b-2 transition-colors ${isActive('/events') ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'}`}>
             <Calendar className="h-5 w-5" />
             <span className="hidden lg:inline-block">Events</span>
@@ -212,12 +218,12 @@ export function Navigation() {
 
         {/* 3. RIGHT SECTION (User Actions) */}
         <div className="flex items-center justify-end gap-2 lg:gap-4 flex-1">
-          
+
           {/* NOTIFICATION BELL WITH DROPDOWN */}
           <div className="relative hidden sm:block" ref={notifRef}>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className={`relative rounded-full hover:text-foreground ${isNotifOpen ? 'bg-muted text-foreground' : 'text-muted-foreground'}`}
               onClick={() => setIsNotifOpen(!isNotifOpen)}
             >
@@ -238,7 +244,7 @@ export function Navigation() {
                     </Button>
                   )}
                 </div>
-                
+
                 <div className="max-h-[400px] overflow-y-auto">
                   {notifications.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
@@ -247,7 +253,7 @@ export function Navigation() {
                   ) : (
                     <div className="flex flex-col">
                       {notifications.map((notif: any) => (
-                        <Link 
+                        <Link
                           key={notif.id}
                           to={notif.type === 'connection_request' ? '/connections' : `/profile/${notif.actor.id}`}
                           onClick={() => {

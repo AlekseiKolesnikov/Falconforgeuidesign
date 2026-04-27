@@ -10,6 +10,7 @@ import { Groups } from "../app/pages/Groups";
 import { Network } from "../app/pages/Network";
 import { Connections } from "../app/pages/Connections";
 import { SavedItems } from "../app/pages/SavedItmes";
+import { Search } from "../app/pages/Search"; // <-- Add this import
 
 export const router = createBrowserRouter([
   {
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "events", Component: Events },
       { path: "connections", Component: Connections },
       { path: "saved", Component: SavedItems },
+      { path: "search", Component: Search }, // <-- Add the search route here
     ],
   },
 ]);
