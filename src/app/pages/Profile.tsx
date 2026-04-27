@@ -12,7 +12,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
-import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock, User, Calendar as CalendarIcon } from "lucide-react";
+import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock, User } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { useParams } from "react-router-dom";
 
@@ -91,7 +91,7 @@ export function Profile() {
   const [newPostImage, setNewPostImage] = useState<File | null>(null);
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
 
-  // OPPORTUNITY EDIT STATE
+  // OPPORTUNITY EDIT STATE (UPDATED FOR AUTHOR ID)
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [jobFormData, setJobFormData] = useState({
@@ -178,21 +178,6 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
-  // FETCH EVENTS HOSTED STRICTLY BY THIS USER
-  const { data: profileEvents = [] } = useQuery({
-    queryKey: ['profileEvents', profile?.id],
-    queryFn: async () => {
-      if (!profile?.id) return [];
-      const { data } = await supabase
-        .from('events')
-        .select(`*, users!inner(id, first_name, last_name, profile_photo_url)`)
-        .eq('user_id', profile.id)
-        .order('created_at', { ascending: false });
-      return data || [];
-    },
-    enabled: !!profile?.id,
-  });
-
   // --- CONNECTIONS ---
   const { data: connectionStatus } = useQuery({
     queryKey: ['connection', currentUser?.id, profile?.id],
@@ -225,7 +210,7 @@ export function Profile() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
 
-  // --- JOB POSTING MUTATION ---
+  // --- JOB POSTING MUTATION (UPDATED FOR AUTHOR ID) ---
   const saveJobMutation = useMutation({
     mutationFn: async () => {
       if (!jobFormData.authorId || !jobFormData.title) throw new Error("Missing required fields");
@@ -442,23 +427,19 @@ export function Profile() {
             )}
           </CardHeader>
           <CardContent>
-            {userPosts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No recent activity.</p>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {userPosts.map((post: any) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    currentUser={currentUser}
-                    hideAuthor={true}
-                    onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
-                    onDelete={(postId) => deletePostMutation.mutate(postId)}
-                    isUpdating={updatePostMutation.isPending}
-                  />
-                ))}
-              </div>
-            )}
+            <div className="grid md:grid-cols-2 gap-4">
+              {userPosts.map((post: any) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  currentUser={currentUser}
+                  hideAuthor={true}
+                  onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
+                  onDelete={(postId) => deletePostMutation.mutate(postId)}
+                  isUpdating={updatePostMutation.isPending}
+                />
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -493,6 +474,7 @@ export function Profile() {
                     )}
 
                     <div>
+                      {/* UPDATED AVATAR LOGIC FOR PERSONAL POSTS */}
                       <div className="flex items-center gap-3 mb-3 pr-16">
                         <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
                           <AvatarImage src={job.users?.profile_photo_url} className="object-cover" />
@@ -518,29 +500,6 @@ export function Profile() {
                         </a>
                       </Button>
                     )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* HOSTED EVENTS SECTION */}
-        {profileEvents.length > 0 && (
-          <Card className="shadow-sm border-0">
-            <CardHeader><CardTitle className="text-xl">Events</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {profileEvents.map((event: any) => (
-                  <div key={event.id} className="p-4 rounded-xl border bg-card relative group flex flex-col justify-between">
-                    <div>
-                      <Badge variant="secondary" className="mb-2">{event.category}</Badge>
-                      <h4 className="font-semibold text-foreground leading-tight mb-2">{event.title}</h4>
-                      <div className="space-y-1 text-xs text-muted-foreground mb-4">
-                        <div className="flex items-center gap-1.5"><CalendarIcon className="h-3 w-3" /> {event.date} at {event.time}</div>
-                        <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {event.location}</div>
-                      </div>
-                    </div>
                   </div>
                 ))}
               </div>
