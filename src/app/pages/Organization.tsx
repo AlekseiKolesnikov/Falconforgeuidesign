@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Building2, MapPin, Link as LinkIcon, Users, ExternalLink, Camera, Edit, Trash2, X, Image as ImageIcon, Pencil, Briefcase, Clock, MoreHorizontal } from "lucide-react";
+import { Building2, MapPin, Link as LinkIcon, Users, ExternalLink, Camera, Edit, Trash2, X, Image as ImageIcon, Pencil, Briefcase, Clock, MoreHorizontal, Calendar as CalendarIcon } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Navigation } from "../components/Navigation";
@@ -106,6 +106,22 @@ export function Organization() {
       if (!id) return [];
       const { data, error } = await supabase
         .from('opportunities')
+        .select(`*, organizations (id, name, logo_url)`)
+        .eq('organization_id', id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
+  // 6. GET ORGANIZATION EVENTS
+  const { data: orgEvents = [] } = useQuery({
+    queryKey: ['organization_events', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from('events')
         .select(`*, organizations (id, name, logo_url)`)
         .eq('organization_id', id)
         .order('created_at', { ascending: false });
@@ -319,6 +335,51 @@ export function Organization() {
           </CardHeader>
           <CardContent><p className="text-foreground leading-relaxed whitespace-pre-wrap">{org.about || `No description provided for ${org.name} yet.`}</p></CardContent>
         </Card>
+
+        {/* EVENTS SECTION */}
+        {orgEvents.length > 0 && (
+          <Card className="shadow-sm border-0">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-xl">Events</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {orgEvents.map((event: any) => (
+                  <div key={event.id} className="p-4 rounded-xl border bg-card relative group flex flex-col justify-between">
+                    
+                    {/* Delete Button (Only visible if owner hovers) */}
+                    {isOwner && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="absolute top-2 right-2 h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive hover:bg-destructive/10 z-10"
+                        onClick={() => {
+                          if(window.confirm("Are you sure you want to delete this event?")) {
+                            supabase.from('events').delete().eq('id', event.id).then(() => {
+                              queryClient.invalidateQueries({ queryKey: ['organization_events', id] });
+                              queryClient.invalidateQueries({ queryKey: ['events'] });
+                            });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    <div>
+                      <Badge variant="secondary" className="mb-2">{event.category}</Badge>
+                      <h4 className="font-semibold text-foreground leading-tight mb-2 pr-8">{event.title}</h4>
+                      <div className="space-y-1 text-xs text-muted-foreground mb-4">
+                        <div className="flex items-center gap-1.5"><CalendarIcon className="h-3 w-3" /> {event.date} at {event.time}</div>
+                        <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {event.location}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* HIRING SECTION */}
         {(orgOpportunities.length > 0 || isOwner) && (

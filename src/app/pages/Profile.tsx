@@ -376,6 +376,16 @@ export function Profile() {
     onSuccess: () => fetchProfile()
   });
 
+  const { data: profileEvents = [] } = useQuery({
+    queryKey: ['profileEvents', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return [];
+      const { data } = await supabase.from('events').select(`*, users!inner(id, first_name, last_name, profile_photo_url)`).eq('user_id', profile.id).order('created_at', { ascending: false });
+      return data || [];
+    },
+    enabled: !!profile?.id,
+  });
+
   const openEditProfile = () => {
     if (profile) {
       setEditForm({ first_name: profile.first_name || "", last_name: profile.last_name || "", headline: profile.headline || "", bio: profile.bio || "", major: profile.major || "", location: profile.location || "" });
@@ -500,6 +510,29 @@ export function Profile() {
                         </a>
                       </Button>
                     )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* HOSTED EVENTS */}
+        {profileEvents.length > 0 && (
+          <Card className="shadow-sm border-0">
+            <CardHeader><CardTitle className="text-xl">Events</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {profileEvents.map((event: any) => (
+                  <div key={event.id} className="p-4 rounded-xl border bg-card relative group flex flex-col justify-between">
+                    <div>
+                      <Badge variant="secondary" className="mb-2">{event.category}</Badge>
+                      <h4 className="font-semibold text-foreground leading-tight mb-2">{event.title}</h4>
+                      <div className="space-y-1 text-xs text-muted-foreground mb-4">
+                        <div className="flex items-center gap-1.5"><CalendarIcon className="h-3 w-3" /> {event.date} at {event.time}</div>
+                        <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {event.location}</div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
