@@ -20,6 +20,14 @@ import { PostCard } from "../components/PostCard";
 
 const FALLBACK_BANNER = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop";
 
+const eventCategories = [
+  { value: "Networking", label: "Networking" },
+  { value: "Career", label: "Career" },
+  { value: "Workshop", label: "Workshop" },
+  { value: "Academic", label: "Academic" },
+  { value: "Social", label: "Social" },
+];
+
 export function Organization() {
   const { id } = useParams<{ id: string }>();
   const { session } = useAuth();
@@ -41,6 +49,13 @@ export function Organization() {
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [jobFormData, setJobFormData] = useState({
     title: "", employment_type: "Internship", location: "", application_url: "", description: ""
+  });
+
+  // Event states
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [eventFormData, setEventFormData] = useState({
+    title: "", date: "", time: "", location: "", category: "Networking", description: ""
   });
 
   // 1. GET CURRENT USER
@@ -211,6 +226,49 @@ export function Organization() {
     setIsJobModalOpen(true);
   };
 
+  // --- EVENT MUTATIONS ---
+  const saveEventMutation = useMutation({
+    mutationFn: async () => {
+      if (!eventFormData.title) throw new Error("Missing title");
+      
+      const eventData = {
+        organization_id: parseInt(id!),
+        title: eventFormData.title.trim(),
+        date: eventFormData.date.trim(),
+        time: eventFormData.time.trim(),
+        location: eventFormData.location.trim(),
+        category: eventFormData.category,
+        description: eventFormData.description.trim()
+      };
+
+      if (editingEventId) {
+        await supabase.from('events').update(eventData).eq('id', editingEventId);
+      } else {
+        await supabase.from('events').insert([eventData]);
+      }
+    },
+    onSuccess: () => {
+      setIsEventModalOpen(false);
+      setEditingEventId(null);
+      queryClient.invalidateQueries({ queryKey: ['organization_events', id] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    }
+  });
+
+  const openEventModalForCreate = () => {
+    setEditingEventId(null);
+    setEventFormData({ title: "", date: "", time: "", location: "", category: "Networking", description: "" });
+    setIsEventModalOpen(true);
+  };
+
+  const openEventModalForEdit = (ev: any) => {
+    setEditingEventId(ev.id);
+    setEventFormData({
+      title: ev.title, date: ev.date, time: ev.time, location: ev.location, category: ev.category, description: ev.description || ""
+    });
+    setIsEventModalOpen(true);
+  };
+
   // --- POST MUTATIONS ---
   const handlePostImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -337,46 +395,55 @@ export function Organization() {
         </Card>
 
         {/* EVENTS SECTION */}
-        {orgEvents.length > 0 && (
+        {(orgEvents.length > 0 || isOwner) && (
           <Card className="shadow-sm border-0">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xl">Events</CardTitle>
+              {isOwner && (
+                <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={openEventModalForCreate}>
+                  Create Event
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {orgEvents.map((event: any) => (
-                  <div key={event.id} className="p-4 rounded-xl border bg-card relative group flex flex-col justify-between">
-                    
-                    {/* Delete Button (Only visible if owner hovers) */}
-                    {isOwner && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="absolute top-2 right-2 h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive hover:bg-destructive/10 z-10"
-                        onClick={() => {
-                          if(window.confirm("Are you sure you want to delete this event?")) {
-                            supabase.from('events').delete().eq('id', event.id).then(() => {
-                              queryClient.invalidateQueries({ queryKey: ['organization_events', id] });
-                              queryClient.invalidateQueries({ queryKey: ['events'] });
-                            });
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+              {orgEvents.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No upcoming events right now.</p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {orgEvents.map((event: any) => (
+                    <div key={event.id} className="p-4 rounded-xl border bg-card relative group flex flex-col justify-between">
+                      
+                      {/* Hover Options: Edit & Delete */}
+                      {isOwner && (
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => openEventModalForEdit(event)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => {
+                            if(window.confirm("Are you sure you want to delete this event?")) {
+                              supabase.from('events').delete().eq('id', event.id).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['organization_events', id] });
+                                queryClient.invalidateQueries({ queryKey: ['events'] });
+                              });
+                            }
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
 
-                    <div>
-                      <Badge variant="secondary" className="mb-2">{event.category}</Badge>
-                      <h4 className="font-semibold text-foreground leading-tight mb-2 pr-8">{event.title}</h4>
-                      <div className="space-y-1 text-xs text-muted-foreground mb-4">
-                        <div className="flex items-center gap-1.5"><CalendarIcon className="h-3 w-3" /> {event.date} at {event.time}</div>
-                        <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {event.location}</div>
+                      <div>
+                        <Badge variant="secondary" className="mb-2">{event.category}</Badge>
+                        <h4 className="font-semibold text-foreground leading-tight mb-2 pr-12">{event.title}</h4>
+                        <div className="space-y-1 text-xs text-muted-foreground mb-4">
+                          <div className="flex items-center gap-1.5"><CalendarIcon className="h-3 w-3" /> {event.date} at {event.time}</div>
+                          <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {event.location}</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -571,6 +638,38 @@ export function Organization() {
               <Button variant="outline" className="rounded-full px-6" onClick={() => setIsJobModalOpen(false)}>Cancel</Button>
               <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!jobFormData.title.trim() || saveJobMutation.isPending}>
                 {saveJobMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL: EDIT/CREATE EVENT */}
+      {isOwner && (
+        <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
+          <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="text-xl">{editingEventId ? "Edit Event" : "Create Event"}</DialogTitle></DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2"><Label>Event Title <span className="text-destructive">*</span></Label><Input value={eventFormData.title} onChange={(e) => setEventFormData({ ...eventFormData, title: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Date</Label><Input placeholder="e.g. March 15, 2025" value={eventFormData.date} onChange={(e) => setEventFormData({ ...eventFormData, date: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Time</Label><Input placeholder="e.g. 6:00 PM - 9:00 PM" value={eventFormData.time} onChange={(e) => setEventFormData({ ...eventFormData, time: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Alumni Hall" value={eventFormData.location} onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })} /></div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={eventFormData.category} onChange={(e) => setEventFormData({...eventFormData, category: e.target.value})}>
+                    {eventCategories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2"><Label>Description</Label><Textarea className="min-h-[100px]" value={eventFormData.description} onChange={(e) => setEventFormData({ ...eventFormData, description: e.target.value })} /></div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="rounded-full px-6" onClick={() => setIsEventModalOpen(false)}>Cancel</Button>
+              <Button className="rounded-full px-8 font-semibold" onClick={() => saveEventMutation.mutate()} disabled={!eventFormData.title.trim() || saveEventMutation.isPending}>
+                {saveEventMutation.isPending ? "Saving..." : "Save Event"}
               </Button>
             </DialogFooter>
           </DialogContent>
