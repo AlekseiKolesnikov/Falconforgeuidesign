@@ -12,7 +12,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
-import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock, User } from "lucide-react";
+import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock, User, Calendar as CalendarIcon } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { useParams } from "react-router-dom";
 
@@ -42,6 +42,14 @@ interface ProfileData {
   swimmer?: boolean;
   created_at?: string;
 }
+
+const eventCategories = [
+  { value: "Networking", label: "Networking" },
+  { value: "Career", label: "Career" },
+  { value: "Workshop", label: "Workshop" },
+  { value: "Academic", label: "Academic" },
+  { value: "Social", label: "Social" },
+];
 
 const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob> => {
   const image = new Image();
@@ -91,11 +99,18 @@ export function Profile() {
   const [newPostImage, setNewPostImage] = useState<File | null>(null);
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
 
-  // OPPORTUNITY EDIT STATE (UPDATED FOR AUTHOR ID)
+  // OPPORTUNITY STATE
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [jobFormData, setJobFormData] = useState({
     authorId: "", title: "", employment_type: "Internship", location: "", application_url: "", description: ""
+  });
+
+  // EVENT STATE
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [eventFormData, setEventFormData] = useState({
+    authorId: "", title: "", date: "", time: "", location: "", category: "Networking", description: ""
   });
 
   const fetchProfile = async () => {
@@ -178,6 +193,21 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
+  // FETCH EVENTS HOSTED STRICTLY BY THIS USER
+  const { data: profileEvents = [] } = useQuery({
+    queryKey: ['profileEvents', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return [];
+      const { data } = await supabase
+        .from('events')
+        .select(`*, users!inner(id, first_name, last_name, profile_photo_url)`)
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+    enabled: !!profile?.id,
+  });
+
   // --- CONNECTIONS ---
   const { data: connectionStatus } = useQuery({
     queryKey: ['connection', currentUser?.id, profile?.id],
@@ -210,11 +240,10 @@ export function Profile() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
 
-  // --- JOB POSTING MUTATION (UPDATED FOR AUTHOR ID) ---
+  // --- JOB MUTATIONS ---
   const saveJobMutation = useMutation({
     mutationFn: async () => {
       if (!jobFormData.authorId || !jobFormData.title) throw new Error("Missing required fields");
-      
       const isUser = jobFormData.authorId.startsWith('user_');
       const authorIdNum = parseInt(jobFormData.authorId.replace(/^(user_|org_)/, ''));
 
@@ -230,6 +259,8 @@ export function Profile() {
 
       if (editingJobId) {
         await supabase.from('opportunities').update(jobData).eq('id', editingJobId);
+      } else {
+        await supabase.from('opportunities').insert([jobData]);
       }
     },
     onSuccess: () => {
@@ -240,18 +271,73 @@ export function Profile() {
     }
   });
 
+  const openJobModalForCreate = () => {
+    setEditingJobId(null);
+    setJobFormData({ authorId: `user_${currentUser?.id}`, title: "", employment_type: "Internship", location: "", application_url: "", description: "" });
+    setIsJobModalOpen(true);
+  };
+
   const openJobModalForEdit = (job: any) => {
     setEditingJobId(job.id);
     setJobFormData({
       authorId: job.user_id ? `user_${job.user_id}` : `org_${job.organization_id}`,
-      title: job.title,
-      employment_type: job.employment_type || "Internship",
-      location: job.location || "",
-      application_url: job.application_url || "",
-      description: job.description || ""
+      title: job.title, employment_type: job.employment_type || "Internship", location: job.location || "", application_url: job.application_url || "", description: job.description || ""
     });
     setIsJobModalOpen(true);
   };
+
+  // --- EVENT MUTATIONS ---
+  const saveEventMutation = useMutation({
+    mutationFn: async () => {
+      if (!eventFormData.authorId || !eventFormData.title) throw new Error("Missing required fields");
+      const isUser = eventFormData.authorId.startsWith('user_');
+      const authorIdNum = parseInt(eventFormData.authorId.replace(/^(user_|org_)/, ''));
+
+      const eventData = {
+        user_id: isUser ? authorIdNum : null,
+        organization_id: !isUser ? authorIdNum : null,
+        title: eventFormData.title.trim(),
+        date: eventFormData.date.trim(),
+        time: eventFormData.time.trim(),
+        location: eventFormData.location.trim(),
+        category: eventFormData.category,
+        description: eventFormData.description.trim()
+      };
+
+      if (editingEventId) {
+        await supabase.from('events').update(eventData).eq('id', editingEventId);
+      } else {
+        await supabase.from('events').insert([eventData]);
+      }
+    },
+    onSuccess: () => {
+      setIsEventModalOpen(false);
+      setEditingEventId(null);
+      queryClient.invalidateQueries({ queryKey: ['profileEvents'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    }
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: number) => { await supabase.from('events').delete().eq('id', id); },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profileEvents'] })
+  });
+
+  const openEventModalForCreate = () => {
+    setEditingEventId(null);
+    setEventFormData({ authorId: `user_${currentUser?.id}`, title: "", date: "", time: "", location: "", category: "Networking", description: "" });
+    setIsEventModalOpen(true);
+  };
+
+  const openEventModalForEdit = (ev: any) => {
+    setEditingEventId(ev.id);
+    setEventFormData({
+      authorId: ev.user_id ? `user_${ev.user_id}` : `org_${ev.organization_id}`,
+      title: ev.title, date: ev.date, time: ev.time, location: ev.location, category: ev.category, description: ev.description || ""
+    });
+    setIsEventModalOpen(true);
+  };
+
 
   // --- PROFILE MUTATIONS ---
   const updateProfileMutation = useMutation({
@@ -427,128 +513,160 @@ export function Profile() {
             )}
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-4">
-              {userPosts.map((post: any) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  currentUser={currentUser}
-                  hideAuthor={true}
-                  onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
-                  onDelete={(postId) => deletePostMutation.mutate(postId)}
-                  isUpdating={updatePostMutation.isPending}
-                />
-              ))}
-            </div>
+            {userPosts.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No recent activity.</p>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {userPosts.map((post: any) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    currentUser={currentUser}
+                    hideAuthor={true}
+                    onUpdate={(postId, content) => updatePostMutation.mutate({ postId, content })}
+                    onDelete={(postId) => deletePostMutation.mutate(postId)}
+                    isUpdating={updatePostMutation.isPending}
+                  />
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* POSTED OPPORTUNITIES (Hiring Section) */}
-        {profileOpportunities.length > 0 && (
+        {/* POSTED OPPORTUNITIES (Hiring Section) - ALWAYS VISIBLE TO OWNER */}
+        {(profileOpportunities.length > 0 || isOwner) && (
           <Card className="shadow-sm border-0">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xl">Hiring</CardTitle>
+              {isOwner && (
+                <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={openJobModalForCreate}>
+                  Post a job
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {profileOpportunities.map((job: any) => (
-                  <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between relative group">
-                    
-                    {/* Hover Options: Edit & Delete */}
-                    {isOwner && (
-                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => openJobModalForEdit(job)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => {
-                          if(window.confirm("Are you sure you want to delete this opportunity?")) {
-                            supabase.from('opportunities').delete().eq('id', job.id).then(() => {
-                              queryClient.invalidateQueries({ queryKey: ['profileOpportunities'] });
-                              queryClient.invalidateQueries({ queryKey: ['opportunities'] });
-                            });
-                          }
-                        }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-
-                    <div>
-                      {/* UPDATED AVATAR LOGIC FOR PERSONAL POSTS */}
-                      <div className="flex items-center gap-3 mb-3 pr-16">
-                        <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
-                          <AvatarImage src={job.users?.profile_photo_url} className="object-cover" />
-                          <AvatarFallback className="rounded-md bg-primary/10 text-primary">
-                            <User className="h-5 w-5" />
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="overflow-hidden">
-                          <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
-                          <p className="text-xs text-muted-foreground truncate">{job.users?.first_name} {job.users?.last_name}</p>
+              {profileOpportunities.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No open opportunities right now.</p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {profileOpportunities.map((job: any) => (
+                    <div key={job.id} className="p-4 rounded-xl border bg-card flex flex-col justify-between relative group">
+                      {isOwner && (
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => openJobModalForEdit(job)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => {
+                            if(window.confirm("Are you sure you want to delete this opportunity?")) {
+                              supabase.from('opportunities').delete().eq('id', job.id).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['profileOpportunities'] });
+                                queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+                              });
+                            }
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-3 mb-3 pr-16">
+                          <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
+                            <AvatarImage src={job.users?.profile_photo_url} className="object-cover" />
+                            <AvatarFallback className="rounded-md bg-primary/10 text-primary">
+                              <User className="h-5 w-5" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="overflow-hidden">
+                            <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
+                            <p className="text-xs text-muted-foreground truncate">{job.users?.first_name} {job.users?.last_name}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
+                          <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
+                          {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
-                        <Badge variant="secondary" className="font-normal">{job.employment_type}</Badge>
-                        {job.location && <Badge variant="outline" className="font-normal">{job.location}</Badge>}
-                      </div>
+                      {job.application_url && (
+                        <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
+                          <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
+                            Apply <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      )}
                     </div>
-                    
-                    {job.application_url && (
-                      <Button variant="outline" size="sm" className="w-full rounded-full gap-2 mt-auto" asChild>
-                        <a href={job.application_url.startsWith('http') ? job.application_url : `https://${job.application_url}`} target="_blank" rel="noopener noreferrer">
-                          Apply <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        <ProfileExperience
-          experiences={experiences}
-          userId={profile.id}
-          isOwner={isOwner}
-          onRefresh={fetchProfile}
-        />
+        {/* HOSTED EVENTS SECTION - ALWAYS VISIBLE TO OWNER */}
+        {(profileEvents.length > 0 || isOwner) && (
+          <Card className="shadow-sm border-0">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-xl">Events</CardTitle>
+              {isOwner && (
+                <Button variant="outline" className="rounded-full font-semibold border-primary text-primary hover:bg-primary/5" onClick={openEventModalForCreate}>
+                  Create Event
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {profileEvents.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No upcoming events right now.</p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {profileEvents.map((event: any) => (
+                    <div key={event.id} className="p-4 rounded-xl border bg-card relative group flex flex-col justify-between">
+                      {isOwner && (
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => openEventModalForEdit(event)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => {
+                            if(window.confirm("Are you sure you want to delete this event?")) deleteEventMutation.mutate(event.id);
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      <div>
+                        <Badge variant="secondary" className="mb-2">{event.category}</Badge>
+                        <h4 className="font-semibold text-foreground leading-tight mb-2 pr-12">{event.title}</h4>
+                        <div className="space-y-1 text-xs text-muted-foreground mb-4">
+                          <div className="flex items-center gap-1.5"><CalendarIcon className="h-3 w-3" /> {event.date} at {event.time}</div>
+                          <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {event.location}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-        <ProfileEducation
-          education={education}
-          userId={profile.id}
-          isOwner={isOwner}
-          onRefresh={fetchProfile}
-        />
+        <ProfileExperience experiences={experiences} userId={profile.id} isOwner={isOwner} onRefresh={fetchProfile} />
+        <ProfileEducation education={education} userId={profile.id} isOwner={isOwner} onRefresh={fetchProfile} />
       </div>
 
       {/* ----------------- MODALS ----------------- */}
 
-      {/* MODAL: EDIT OPPORTUNITY (From Profile) */}
+      {/* MODAL: EDIT OPPORTUNITY */}
       {isOwner && (
         <Dialog open={isJobModalOpen} onOpenChange={setIsJobModalOpen}>
           <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle className="text-xl">Edit Opportunity</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-xl">{editingJobId ? "Edit Opportunity" : "Post an Opportunity"}</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
-              
               <div className="space-y-2">
                 <Label>Posting as <span className="text-destructive">*</span></Label>
-                <select 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium" 
-                  value={jobFormData.authorId} 
-                  onChange={(e) => setJobFormData({...jobFormData, authorId: e.target.value})}
-                >
+                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium" value={jobFormData.authorId} onChange={(e) => setJobFormData({...jobFormData, authorId: e.target.value})}>
                   <option value={`user_${currentUser?.id}`}>Myself ({currentUser?.first_name} {currentUser?.last_name})</option>
-                  {myOrganizations.map((org: any) => (
-                    <option key={org.id} value={`org_${org.id}`}>{org.name}</option>
-                  ))}
+                  {myOrganizations.map((org: any) => <option key={org.id} value={`org_${org.id}`}>{org.name}</option>)}
                 </select>
               </div>
-
-              <div className="space-y-2">
-                <Label>Job Title <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g. Graphic Design Intern" value={jobFormData.title} onChange={(e) => setJobFormData({ ...jobFormData, title: e.target.value })} />
-              </div>
+              <div className="space-y-2"><Label>Job Title <span className="text-destructive">*</span></Label><Input placeholder="e.g. Graphic Design Intern" value={jobFormData.title} onChange={(e) => setJobFormData({ ...jobFormData, title: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Employment Type</Label>
@@ -559,19 +677,10 @@ export function Profile() {
                     <option value="Volunteer">Volunteer</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Location</Label>
-                  <Input placeholder="e.g. Remote, or Montevallo, AL" value={jobFormData.location} onChange={(e) => setJobFormData({ ...jobFormData, location: e.target.value })} />
-                </div>
+                <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Remote, or Montevallo, AL" value={jobFormData.location} onChange={(e) => setJobFormData({ ...jobFormData, location: e.target.value })} /></div>
               </div>
-              <div className="space-y-2">
-                <Label>Application Link (External URL)</Label>
-                <Input placeholder="https://..." value={jobFormData.application_url} onChange={(e) => setJobFormData({ ...jobFormData, application_url: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea placeholder="Briefly describe the role and requirements..." className="min-h-[100px]" value={jobFormData.description} onChange={(e) => setJobFormData({ ...jobFormData, description: e.target.value })} />
-              </div>
+              <div className="space-y-2"><Label>Application Link (External URL)</Label><Input placeholder="https://..." value={jobFormData.application_url} onChange={(e) => setJobFormData({ ...jobFormData, application_url: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Briefly describe the role and requirements..." className="min-h-[100px]" value={jobFormData.description} onChange={(e) => setJobFormData({ ...jobFormData, description: e.target.value })} /></div>
             </div>
             <DialogFooter>
               <Button variant="outline" className="rounded-full px-6" onClick={() => setIsJobModalOpen(false)}>Cancel</Button>
@@ -583,7 +692,46 @@ export function Profile() {
         </Dialog>
       )}
 
-      {/* MODAL: EDIT PROFILE WITH SKILLS INCLUDED */}
+      {/* MODAL: EDIT EVENT */}
+      {isOwner && (
+        <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
+          <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="text-xl">{editingEventId ? "Edit Event" : "Create Event"}</DialogTitle></DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Hosting as <span className="text-destructive">*</span></Label>
+                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium" value={eventFormData.authorId} onChange={(e) => setEventFormData({...eventFormData, authorId: e.target.value})}>
+                  <option value={`user_${currentUser?.id}`}>Myself ({currentUser?.first_name} {currentUser?.last_name})</option>
+                  {myOrganizations.map((org: any) => <option key={org.id} value={`org_${org.id}`}>{org.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2"><Label>Event Title <span className="text-destructive">*</span></Label><Input value={eventFormData.title} onChange={(e) => setEventFormData({ ...eventFormData, title: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Date</Label><Input placeholder="e.g. March 15, 2025" value={eventFormData.date} onChange={(e) => setEventFormData({ ...eventFormData, date: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Time</Label><Input placeholder="e.g. 6:00 PM - 9:00 PM" value={eventFormData.time} onChange={(e) => setEventFormData({ ...eventFormData, time: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Location</Label><Input placeholder="e.g. Alumni Hall" value={eventFormData.location} onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })} /></div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={eventFormData.category} onChange={(e) => setEventFormData({...eventFormData, category: e.target.value})}>
+                    {eventCategories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2"><Label>Description</Label><Textarea className="min-h-[100px]" value={eventFormData.description} onChange={(e) => setEventFormData({ ...eventFormData, description: e.target.value })} /></div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="rounded-full px-6" onClick={() => setIsEventModalOpen(false)}>Cancel</Button>
+              <Button className="rounded-full px-8 font-semibold" onClick={() => saveEventMutation.mutate()} disabled={!eventFormData.title.trim() || saveEventMutation.isPending}>
+                {saveEventMutation.isPending ? "Saving..." : "Save Event"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL: EDIT PROFILE WITH SKILLS */}
       {isOwner && (
         <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
           <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
@@ -604,38 +752,14 @@ export function Profile() {
                   {skills.map((skill) => (
                     <Badge key={skill.id} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-sm bg-background border shadow-sm">
                       {skill.name}
-                      <button
-                        type="button"
-                        onClick={() => removeSkillMutation.mutate(skill.id)}
-                        className="hover:text-destructive text-muted-foreground ml-1 transition-colors"
-                        title="Remove Skill"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      <button type="button" onClick={() => removeSkillMutation.mutate(skill.id)} className="hover:text-destructive text-muted-foreground ml-1 transition-colors" title="Remove Skill"><X className="h-3 w-3" /></button>
                     </Badge>
                   ))}
                   {skills.length === 0 && <span className="text-sm text-muted-foreground">No skills added yet.</span>}
                 </div>
                 <div className="flex gap-2">
-                  <Input
-                    placeholder="Type a skill and press Add..."
-                    value={newSkillName}
-                    onChange={(e) => setNewSkillName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addSkillMutation.mutate(newSkillName);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => addSkillMutation.mutate(newSkillName)}
-                    disabled={!newSkillName.trim() || addSkillMutation.isPending}
-                  >
-                    Add
-                  </Button>
+                  <Input placeholder="Type a skill and press Add..." value={newSkillName} onChange={(e) => setNewSkillName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkillMutation.mutate(newSkillName); } }} />
+                  <Button type="button" variant="secondary" onClick={() => addSkillMutation.mutate(newSkillName)} disabled={!newSkillName.trim() || addSkillMutation.isPending}>Add</Button>
                 </div>
               </div>
             </div>
@@ -696,9 +820,7 @@ export function Profile() {
             {newPostImagePreview && (
               <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden mb-4 border">
                 <img src={newPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
-                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md" onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}>
-                  <X className="h-4 w-4" />
-                </Button>
+                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md" onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}><X className="h-4 w-4" /></Button>
               </div>
             )}
             <DialogFooter className="flex justify-between items-center sm:justify-between border-t pt-4 mt-auto">
@@ -708,9 +830,7 @@ export function Profile() {
                   <input type="file" className="hidden" accept="image/*" onChange={handlePostImageSelect} />
                 </label>
               </div>
-              <Button className="rounded-full font-semibold px-6" disabled={!newPostContent.trim() || createPostMutation.isPending} onClick={() => createPostMutation.mutate()}>
-                {createPostMutation.isPending ? "Posting..." : "Post"}
-              </Button>
+              <Button className="rounded-full font-semibold px-6" disabled={!newPostContent.trim() || createPostMutation.isPending} onClick={() => createPostMutation.mutate()}>{createPostMutation.isPending ? "Posting..." : "Post"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
