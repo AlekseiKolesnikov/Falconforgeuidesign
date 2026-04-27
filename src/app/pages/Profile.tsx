@@ -12,7 +12,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Slider } from "../components/ui/slider";
-import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock } from "lucide-react";
+import { X, Image as ImageIcon, Trash2, ExternalLink, Pencil, Building2, Briefcase, MapPin, Clock, User } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { useParams } from "react-router-dom";
 
@@ -91,11 +91,11 @@ export function Profile() {
   const [newPostImage, setNewPostImage] = useState<File | null>(null);
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(null);
 
-  // OPPORTUNITY EDIT STATE
+  // OPPORTUNITY EDIT STATE (UPDATED FOR AUTHOR ID)
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [jobFormData, setJobFormData] = useState({
-    organization_id: "", title: "", employment_type: "Internship", location: "", application_url: "", description: ""
+    authorId: "", title: "", employment_type: "Internship", location: "", application_url: "", description: ""
   });
 
   const fetchProfile = async () => {
@@ -151,7 +151,6 @@ export function Profile() {
     enabled: !!profile?.id,
   });
 
-  // FETCH ORGANIZATIONS OWNED BY LOGGED IN USER (For the Job Edit Dropdown)
   const { data: myOrganizations = [] } = useQuery({
     queryKey: ['myOwnedOrganizations', currentUser?.id],
     queryFn: async () => {
@@ -162,15 +161,15 @@ export function Profile() {
     enabled: !!currentUser?.id,
   });
 
-  // FETCH OPPORTUNITIES POSTED BY THIS USER
+  // FETCH OPPORTUNITIES POSTED STRICTLY BY THIS USER
   const { data: profileOpportunities = [] } = useQuery({
     queryKey: ['profileOpportunities', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return [];
       const { data, error } = await supabase
         .from('opportunities')
-        .select(`*, organizations!inner(id, name, logo_url, owner_id)`)
-        .eq('organizations.owner_id', profile.id)
+        .select(`*, users!inner(id, first_name, last_name, profile_photo_url)`)
+        .eq('user_id', profile.id)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -211,18 +210,24 @@ export function Profile() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connection'] })
   });
 
-  // --- JOB POSTING MUTATION ---
+  // --- JOB POSTING MUTATION (UPDATED FOR AUTHOR ID) ---
   const saveJobMutation = useMutation({
     mutationFn: async () => {
-      if (!jobFormData.organization_id || !jobFormData.title) throw new Error("Missing required fields");
+      if (!jobFormData.authorId || !jobFormData.title) throw new Error("Missing required fields");
+      
+      const isUser = jobFormData.authorId.startsWith('user_');
+      const authorIdNum = parseInt(jobFormData.authorId.replace(/^(user_|org_)/, ''));
+
       const jobData = {
-        organization_id: parseInt(jobFormData.organization_id),
+        user_id: isUser ? authorIdNum : null,
+        organization_id: !isUser ? authorIdNum : null,
         title: jobFormData.title.trim(),
         employment_type: jobFormData.employment_type,
         location: jobFormData.location.trim() || null,
         application_url: jobFormData.application_url.trim() || null,
         description: jobFormData.description.trim() || null
       };
+
       if (editingJobId) {
         await supabase.from('opportunities').update(jobData).eq('id', editingJobId);
       }
@@ -238,7 +243,7 @@ export function Profile() {
   const openJobModalForEdit = (job: any) => {
     setEditingJobId(job.id);
     setJobFormData({
-      organization_id: job.organization_id.toString(),
+      authorId: job.user_id ? `user_${job.user_id}` : `org_${job.organization_id}`,
       title: job.title,
       employment_type: job.employment_type || "Internship",
       location: job.location || "",
@@ -469,17 +474,17 @@ export function Profile() {
                     )}
 
                     <div>
+                      {/* UPDATED AVATAR LOGIC FOR PERSONAL POSTS */}
                       <div className="flex items-center gap-3 mb-3 pr-16">
-                        {/* NEUTRAL PLACEHOLDER AVATAR */}
                         <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
-                          <AvatarImage src={job.organizations?.logo_url || undefined} className="object-contain p-1" />
-                          <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
-                            <Building2 className="h-5 w-5" />
+                          <AvatarImage src={job.users?.profile_photo_url} className="object-cover" />
+                          <AvatarFallback className="rounded-md bg-primary/10 text-primary">
+                            <User className="h-5 w-5" />
                           </AvatarFallback>
                         </Avatar>
                         <div className="overflow-hidden">
                           <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
-                          <p className="text-xs text-muted-foreground truncate">{job.organizations?.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{job.users?.first_name} {job.users?.last_name}</p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-4">
@@ -525,14 +530,21 @@ export function Profile() {
           <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle className="text-xl">Edit Opportunity</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
-              {myOrganizations.length > 1 && (
-                <div className="space-y-2">
-                  <Label>Posting as <span className="text-destructive">*</span></Label>
-                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={jobFormData.organization_id} onChange={(e) => setJobFormData({...jobFormData, organization_id: e.target.value})}>
-                    {myOrganizations.map((org: any) => <option key={org.id} value={org.id}>{org.name}</option>)}
-                  </select>
-                </div>
-              )}
+              
+              <div className="space-y-2">
+                <Label>Posting as <span className="text-destructive">*</span></Label>
+                <select 
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium" 
+                  value={jobFormData.authorId} 
+                  onChange={(e) => setJobFormData({...jobFormData, authorId: e.target.value})}
+                >
+                  <option value={`user_${currentUser?.id}`}>Myself ({currentUser?.first_name} {currentUser?.last_name})</option>
+                  {myOrganizations.map((org: any) => (
+                    <option key={org.id} value={`org_${org.id}`}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="space-y-2">
                 <Label>Job Title <span className="text-destructive">*</span></Label>
                 <Input placeholder="e.g. Graphic Design Intern" value={jobFormData.title} onChange={(e) => setJobFormData({ ...jobFormData, title: e.target.value })} />
@@ -544,6 +556,7 @@ export function Profile() {
                     <option value="Internship">Internship</option>
                     <option value="Full-time">Full-time</option>
                     <option value="Part-time">Part-time</option>
+                    <option value="Volunteer">Volunteer</option>
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -562,7 +575,7 @@ export function Profile() {
             </div>
             <DialogFooter>
               <Button variant="outline" className="rounded-full px-6" onClick={() => setIsJobModalOpen(false)}>Cancel</Button>
-              <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!jobFormData.title.trim() || !jobFormData.organization_id || saveJobMutation.isPending}>
+              <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!jobFormData.title.trim() || !jobFormData.authorId || saveJobMutation.isPending}>
                 {saveJobMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
