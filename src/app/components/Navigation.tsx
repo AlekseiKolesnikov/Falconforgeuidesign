@@ -188,6 +188,21 @@ export function Navigation() {
                     </Link>
                   ))
                 )}
+
+                {/* THE NEW "SEE ALL RESULTS" BUTTON */}
+                <div className="border-t border-border mt-2 pt-2 px-2">
+                  <Link 
+                    to={`/search?q=${encodeURIComponent(searchQuery.trim())}`}
+                    onClick={() => {
+                      setIsSearchOpen(false);
+                      setSearchQuery("");
+                    }}
+                    className="flex w-full items-center justify-center py-2 text-sm font-medium text-primary hover:bg-primary/5 rounded-md transition-colors"
+                  >
+                    See all results for "{searchQuery}"
+                  </Link>
+                </div>
+
               </div>
             )}
           </div>
