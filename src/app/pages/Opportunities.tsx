@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Briefcase, MapPin, ExternalLink, Plus, Building2, Clock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Briefcase, MapPin, ExternalLink, Plus, Building2, Clock, MoreHorizontal, Pencil, Trash2, User } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Navigation } from "../components/Navigation";
@@ -27,7 +27,7 @@ export function Opportunities() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
-    organization_id: "",
+    authorId: "", // Will be "user_123" or "org_456"
     title: "",
     employment_type: "Internship",
     location: "",
@@ -35,7 +35,6 @@ export function Opportunities() {
     description: ""
   });
 
-  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -50,7 +49,10 @@ export function Opportunities() {
     queryKey: ['currentUser', session?.user?.id],
     queryFn: async () => {
       if (!session?.user?.id) return null;
-      const { data } = await supabase.from('users').select('id').eq('auth_users_uuid', session.user.id).single();
+      const { data } = await supabase.from('users').select('id, first_name, last_name, profile_photo_url').eq('auth_users_uuid', session.user.id).single();
+      if (data && !formData.authorId) {
+        setFormData(prev => ({ ...prev, authorId: `user_${data.id}` }));
+      }
       return data;
     },
     enabled: !!session?.user?.id,
@@ -61,9 +63,6 @@ export function Opportunities() {
     queryFn: async () => {
       if (!currentUser?.id) return [];
       const { data } = await supabase.from('organizations').select('id, name, logo_url').eq('owner_id', currentUser.id);
-      if (data && data.length > 0 && !formData.organization_id) {
-        setFormData(prev => ({ ...prev, organization_id: data[0].id.toString() }));
-      }
       return data || [];
     },
     enabled: !!currentUser?.id,
@@ -74,20 +73,23 @@ export function Opportunities() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('opportunities')
-        .select(`*, organizations (id, name, logo_url)`)
+        .select(`*, organizations (id, name, logo_url), users (id, first_name, last_name, profile_photo_url)`)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     }
   });
 
-  // COMBINED CREATE/UPDATE MUTATION
   const saveJobMutation = useMutation({
     mutationFn: async () => {
-      if (!formData.organization_id || !formData.title) throw new Error("Missing required fields");
+      if (!formData.authorId || !formData.title) throw new Error("Missing required fields");
       
+      const isUser = formData.authorId.startsWith('user_');
+      const authorIdNum = parseInt(formData.authorId.replace(/^(user_|org_)/, ''));
+
       const jobData = {
-        organization_id: parseInt(formData.organization_id),
+        user_id: isUser ? authorIdNum : null,
+        organization_id: !isUser ? authorIdNum : null,
         title: formData.title.trim(),
         employment_type: formData.employment_type,
         location: formData.location.trim() || null,
@@ -124,7 +126,7 @@ export function Opportunities() {
   const openModalForCreate = () => {
     setEditingJobId(null);
     setFormData({
-      organization_id: myOrganizations.length > 0 ? myOrganizations[0].id.toString() : "",
+      authorId: `user_${currentUser?.id}`,
       title: "", employment_type: "Internship", location: "", application_url: "", description: ""
     });
     setIsModalOpen(true);
@@ -133,7 +135,7 @@ export function Opportunities() {
   const openModalForEdit = (job: any) => {
     setEditingJobId(job.id);
     setFormData({
-      organization_id: job.organization_id.toString(),
+      authorId: job.user_id ? `user_${job.user_id}` : `org_${job.organization_id}`,
       title: job.title,
       employment_type: job.employment_type || "Internship",
       location: job.location || "",
@@ -169,15 +171,14 @@ export function Opportunities() {
             <h1 className="text-3xl font-bold text-foreground">Opportunities</h1>
             <p className="text-muted-foreground mt-1">Find your next internship or career move.</p>
           </div>
-          {myOrganizations.length > 0 && (
-            <Button onClick={openModalForCreate} className="rounded-full px-6 gap-2 shadow-sm shrink-0">
-              <Plus className="h-5 w-5" /> Post Opportunity
-            </Button>
-          )}
+          <Button onClick={openModalForCreate} className="rounded-full px-6 gap-2 shadow-sm shrink-0">
+            <Plus className="h-5 w-5" /> Post Opportunity
+          </Button>
         </div>
 
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          {["All", "Full-time", "Part-time", "Internship"].map((tab) => (
+          {/* ADDED VOLUNTEER TAB */}
+          {["All", "Full-time", "Part-time", "Internship", "Volunteer"].map((tab) => (
             <Button key={tab} variant={activeTab === tab ? "default" : "outline"} className="rounded-full px-6 whitespace-nowrap shadow-sm" onClick={() => setActiveTab(tab)}>
               {tab}
             </Button>
@@ -193,8 +194,11 @@ export function Opportunities() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredOpportunities.map((job: any) => {
-              const isOwner = myOrganizations.some((org: any) => org.id === job.organization_id);
-              const avatarUrl = job.organizations?.logo_url || FALLBACK_ORG_LOGO;
+              const isUserPost = !!job.user_id;
+              const isOwner = isUserPost ? job.user_id === currentUser?.id : myOrganizations.some((org: any) => org.id === job.organization_id);
+              
+              const avatarUrl = isUserPost ? job.users?.profile_photo_url : (job.organizations?.logo_url || undefined);
+              const authorName = isUserPost ? `${job.users?.first_name} ${job.users?.last_name}` : job.organizations?.name;
 
               return (
                 <Card key={job.id} className="overflow-visible shadow-sm border border-border hover:shadow-md transition-shadow flex flex-col h-full relative">
@@ -221,7 +225,9 @@ export function Opportunities() {
                     <div className="flex justify-between items-start mb-4 gap-3">
                       <Avatar className="h-12 w-12 border bg-white rounded-lg shrink-0">
                         <AvatarImage src={avatarUrl} className="object-cover" />
-                        <AvatarFallback className="rounded-lg bg-primary/10 text-primary"><Building2 className="h-6 w-6" /></AvatarFallback>
+                        <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
+                          {isUserPost ? <User className="h-6 w-6" /> : <Building2 className="h-6 w-6" />}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="text-xs text-muted-foreground flex items-center gap-1 shrink-0 bg-muted px-2 py-1 rounded-md mr-8">
                         <Clock className="h-3 w-3" /> {timeAgo(job.created_at)}
@@ -229,7 +235,7 @@ export function Opportunities() {
                     </div>
 
                     <h3 className="font-bold text-lg text-foreground line-clamp-2 mb-1">{job.title}</h3>
-                    <p className="font-medium text-primary text-sm mb-3">{job.organizations?.name}</p>
+                    <p className="font-medium text-primary text-sm mb-3">{authorName}</p>
 
                     <div className="space-y-2 text-sm text-muted-foreground mb-4">
                       {job.location && <div className="flex items-center gap-2"><MapPin className="h-4 w-4 shrink-0" /><span className="truncate">{job.location}</span></div>}
@@ -237,7 +243,7 @@ export function Opportunities() {
                     </div>
 
                     <div className="mt-auto pt-4 flex gap-2">
-                      <Button className="w-full rounded-full" variant="secondary" onClick={() => setSelectedJob(job)}>View Details</Button>
+                      <Button className="w-full rounded-full" variant="secondary" onClick={() => setSelectedJob({ ...job, isUserPost, avatarUrl, authorName })}>View Details</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -253,12 +259,14 @@ export function Opportunities() {
           <DialogContent className="sm:max-w-[600px] rounded-2xl max-h-[85vh] overflow-y-auto flex flex-col">
             <DialogHeader className="flex flex-row items-start gap-4 pb-4 border-b">
               <Avatar className="h-16 w-16 border bg-white rounded-lg shrink-0">
-                <AvatarImage src={selectedJob.organizations?.logo_url || FALLBACK_ORG_LOGO} className="object-cover" />
-                <AvatarFallback className="rounded-lg bg-primary/10 text-primary"><Building2 className="h-8 w-8" /></AvatarFallback>
+                <AvatarImage src={selectedJob.avatarUrl} className="object-cover" />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
+                  {selectedJob.isUserPost ? <User className="h-8 w-8" /> : <Building2 className="h-8 w-8" />}
+                </AvatarFallback>
               </Avatar>
               <div>
                 <DialogTitle className="text-2xl font-bold">{selectedJob.title}</DialogTitle>
-                <p className="text-primary font-medium mt-1">{selectedJob.organizations?.name}</p>
+                <p className="text-primary font-medium mt-1">{selectedJob.authorName}</p>
                 <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-2">
                   {selectedJob.location && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{selectedJob.location}</span>}
                   {selectedJob.employment_type && <span className="flex items-center gap-1"><Briefcase className="h-4 w-4" />{selectedJob.employment_type}</span>}
@@ -289,14 +297,21 @@ export function Opportunities() {
         <DialogContent className="sm:max-w-[550px] rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="text-xl">{editingJobId ? "Edit Opportunity" : "Post an Opportunity"}</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-4">
-            {myOrganizations.length > 1 && (
-              <div className="space-y-2">
-                <Label>Posting as <span className="text-destructive">*</span></Label>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formData.organization_id} onChange={(e) => setFormData({...formData, organization_id: e.target.value})}>
-                  {myOrganizations.map((org: any) => <option key={org.id} value={org.id}>{org.name}</option>)}
-                </select>
-              </div>
-            )}
+            
+            <div className="space-y-2">
+              <Label>Posting as <span className="text-destructive">*</span></Label>
+              <select 
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium" 
+                value={formData.authorId} 
+                onChange={(e) => setFormData({...formData, authorId: e.target.value})}
+              >
+                <option value={`user_${currentUser?.id}`}>Myself ({currentUser?.first_name} {currentUser?.last_name})</option>
+                {myOrganizations.map((org: any) => (
+                  <option key={org.id} value={`org_${org.id}`}>{org.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-2">
               <Label>Job Title <span className="text-destructive">*</span></Label>
               <Input placeholder="e.g. Graphic Design Intern" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
@@ -308,6 +323,8 @@ export function Opportunities() {
                   <option value="Internship">Internship</option>
                   <option value="Full-time">Full-time</option>
                   <option value="Part-time">Part-time</option>
+                  {/* ADDED VOLUNTEER OPTION HERE TOO */}
+                  <option value="Volunteer">Volunteer</option> 
                 </select>
               </div>
               <div className="space-y-2">
@@ -326,7 +343,7 @@ export function Opportunities() {
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-full px-6" onClick={closeModal}>Cancel</Button>
-            <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!formData.title.trim() || !formData.organization_id || saveJobMutation.isPending}>
+            <Button className="rounded-full px-8 font-semibold" onClick={() => saveJobMutation.mutate()} disabled={!formData.title.trim() || !formData.authorId || saveJobMutation.isPending}>
               {saveJobMutation.isPending ? "Saving..." : editingJobId ? "Save Changes" : "Post Job"}
             </Button>
           </DialogFooter>
