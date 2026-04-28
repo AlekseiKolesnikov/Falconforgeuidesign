@@ -258,9 +258,9 @@ export function Events() {
                   {showOnlyRegistered ? "View All Events" : "My Registered Events"}
                 </Button>
                 
-                {/* UPDATED: Link to the official campus calendar */}
+                {/* UPDATED: Link to the official campus calendar. */}
                 <Button className="w-full justify-start gap-2" variant="outline" asChild>
-                  <a href="https://www.montevallo.edu/campus-life/campus-calendar/" target="_blank" rel="noopener noreferrer">
+                  <a href="https://www.montevallo.edu/campus-life/campus-events/university-calendar/" target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4" />Campus Calendar
                   </a>
                 </Button>
