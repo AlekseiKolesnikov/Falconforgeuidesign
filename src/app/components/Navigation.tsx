@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Home, Briefcase, Calendar, Bell, LogOut, Zap, Users, UserPlus, CheckCircle } from "lucide-react";
+import { Search, Home, Briefcase, Calendar, Bell, LogOut, Users, UserPlus, CheckCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -127,11 +127,18 @@ export function Navigation() {
 
         {/* 1. LEFT SECTION (Logo & Search) */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
-          <Link to="/feed" className="flex items-center gap-2 font-bold text-lg text-foreground hover:opacity-90 shrink-0">
-            <div className="bg-primary text-primary-foreground p-1.5 rounded-md flex items-center justify-center">
-              <Zap className="h-5 w-5 fill-current" />
-            </div>
-            <span className="hidden xl:block text-xl tracking-tight">Falcon Forge</span>
+          <Link to="/feed" className="flex items-center gap-3 font-bold text-lg hover:opacity-90 shrink-0">
+            {/* OFFICIAL MONTEVALLO LOGO */}
+            <img 
+              src="/UMlogoV_GOLD.png" 
+              alt="Montevallo Logo" 
+              className="h-9 w-auto object-contain drop-shadow-sm"
+              onError={(e) => e.currentTarget.style.display = 'none'} 
+            />
+            {/* FALCON FORGE TEXT (Styled with Montevallo Purple) */}
+            <span className="hidden xl:block text-xl tracking-tight" style={{ color: '#4A235A' }}>
+              Falcon Forge
+            </span>
           </Link>
 
           <div className="relative hidden md:block max-w-[280px] w-full" ref={searchRef}>

@@ -18,7 +18,8 @@ import { Textarea } from "../components/ui/textarea";
 // IMPORT POST CARD
 import { PostCard } from "../components/PostCard";
 
-const FALLBACK_BANNER = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop";
+// Using the official purple horizontal logo as a clean, branded default background
+const FALLBACK_BANNER = "/UMlogoHZ_PPL.png"; 
 
 const eventCategories = [
   { value: "Networking", label: "Networking" },
@@ -343,7 +344,7 @@ export function Organization() {
         {/* HEADER SECTION */}
         <Card className="overflow-hidden shadow-sm border-0">
           <div className="h-64 relative bg-muted">
-            <img src={org.banner_url || FALLBACK_BANNER} alt="Cover" className="w-full h-full object-cover" />
+            <img src={org.banner_url || FALLBACK_BANNER} alt="Cover" className="w-full h-full object-cover bg-white" />
             {isOwner && (
               <div className="absolute top-4 right-4 flex gap-2 z-10">
                 <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-9 w-9 flex items-center justify-center rounded-full shadow-md transition-colors">
@@ -358,7 +359,15 @@ export function Organization() {
             <div className="-mt-16 relative z-10 mb-4 w-fit">
               <Avatar className="h-32 w-32 border-4 border-card shadow-xl bg-white rounded-xl">
                 <AvatarImage src={org.logo_url} className="object-contain p-2" />
-                <AvatarFallback className="text-3xl rounded-xl bg-primary/10 text-primary"><Building2 className="h-12 w-12" /></AvatarFallback>
+                {/* OFFICIAL UM LOGO FALLBACK FOR MAIN ORG AVATAR */}
+                <AvatarFallback className="rounded-xl bg-slate-50 flex items-center justify-center">
+                  <img 
+                    src="/UMlogoV_GOLD.png" 
+                    alt="UM Fallback" 
+                    className="h-16 w-auto object-contain opacity-60" 
+                    onError={(e) => e.currentTarget.style.display = 'none'}
+                  />
+                </AvatarFallback>
               </Avatar>
               {isOwner && (
                 <label className="absolute bottom-1 right-1 cursor-pointer bg-secondary hover:bg-secondary/80 text-secondary-foreground h-8 w-8 flex items-center justify-center rounded-full shadow-md transition-colors z-10">
@@ -488,12 +497,20 @@ export function Organization() {
 
                       <div>
                         <div className="flex items-center gap-3 mb-3 pr-16">
+                          
+                          {/* OFFICIAL UM LOGO FALLBACK FOR HIRING CARDS */}
                           <Avatar className="h-10 w-10 border bg-white rounded-md shrink-0">
                             <AvatarImage src={job.organizations?.logo_url} className="object-contain p-1" />
-                            <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
-                              <Building2 className="h-5 w-5" />
+                            <AvatarFallback className="rounded-md bg-slate-50 flex items-center justify-center">
+                              <img 
+                                src="/UMlogoV_GOLD.png" 
+                                alt="UM Fallback" 
+                                className="h-6 w-auto object-contain opacity-60" 
+                                onError={(e) => e.currentTarget.style.display = 'none'}
+                              />
                             </AvatarFallback>
                           </Avatar>
+
                           <div className="overflow-hidden">
                             <h4 className="font-semibold text-foreground truncate leading-tight">{job.title}</h4>
                             <p className="text-xs text-muted-foreground truncate">{job.organizations?.name}</p>
