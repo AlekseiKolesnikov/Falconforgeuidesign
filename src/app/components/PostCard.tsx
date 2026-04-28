@@ -24,6 +24,7 @@ export function PostCard({ post, currentUser, hideAuthor = false, onUpdate, onDe
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [showMenu, setShowMenu] = useState(false);
+  const [isCopied, setIsCopied] = useState(false); // NEW STATE FOR SHARE
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwner = currentUser?.id === post.user_id;
@@ -49,6 +50,35 @@ export function PostCard({ post, currentUser, hideAuthor = false, onUpdate, onDe
       onUpdate(post.id, editContent);
     }
     setIsEditing(false);
+  };
+
+  // --- SHARE POST LOGIC ---
+  const handleShare = async () => {
+    // Generate a direct link to this specific post
+    const postUrl = `${window.location.origin}/post/${post.id}`;
+
+    // Use Native Share API if available (Mobile devices, Safari, Edge)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Post by ${post.users?.first_name} ${post.users?.last_name}`,
+          text: "Check out this post on Falcon Forge!",
+          url: postUrl,
+        });
+      } catch (error) {
+        console.log("Share canceled or failed", error);
+      }
+    } else {
+      // Fallback: Copy to clipboard for Desktop Chrome/Firefox
+      try {
+        await navigator.clipboard.writeText(postUrl);
+        setIsCopied(true);
+        // Reset the button text after 2 seconds
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (error) {
+        console.error("Failed to copy link", error);
+      }
+    }
   };
 
   // --- SAVED POSTS LOGIC ---
@@ -78,7 +108,7 @@ export function PostCard({ post, currentUser, hideAuthor = false, onUpdate, onDe
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['isSaved', post.id] });
-      queryClient.invalidateQueries({ queryKey: ['savedItems'] }); // Refreshes the saved page!
+      queryClient.invalidateQueries({ queryKey: ['savedItems'] }); 
     }
   });
 
@@ -144,12 +174,19 @@ export function PostCard({ post, currentUser, hideAuthor = false, onUpdate, onDe
           <Button variant="ghost" size="sm" className="text-muted-foreground gap-2 rounded-full hover:text-primary hover:bg-primary/5">
             <MessageCircle className="h-4 w-4" /> <span>Comment</span>
           </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground gap-2 rounded-full hover:text-primary hover:bg-primary/5">
-            <Share2 className="h-4 w-4" /> <span className="hidden sm:inline">Share</span>
+          
+          {/* UPDATED SHARE BUTTON */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className={`gap-2 rounded-full hover:bg-primary/5 ${isCopied ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+            onClick={handleShare}
+          >
+            {isCopied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />} 
+            <span className="hidden sm:inline">{isCopied ? "Copied!" : "Share"}</span>
           </Button>
         </div>
         
-        {/* NEW BOOKMARK BUTTON */}
         <Button 
           variant="ghost" 
           size="icon" 
