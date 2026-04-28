@@ -30,6 +30,9 @@ export function Events() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedCategory, setSelectedCategory] = useState("all");
+  
+  // NEW: State for the "My Registered Events" toggle
+  const [showOnlyRegistered, setShowOnlyRegistered] = useState(false);
 
   // CREATE EVENT MODAL STATES
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -116,12 +119,20 @@ export function Events() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['events'] })
   });
 
+  // FILTER LOGIC
   const filteredEvents = events.filter((event: any) => {
-    if (selectedCategory === "all") return true;
-    return event.category === selectedCategory;
+    // 1. Filter by category
+    if (selectedCategory !== "all" && event.category !== selectedCategory) return false;
+    
+    // 2. Filter by Registered status
+    if (showOnlyRegistered) {
+      const isAttending = event.event_rsvps?.some((rsvp: any) => rsvp.user_id === currentUser?.id);
+      if (!isAttending) return false;
+    }
+    
+    return true;
   });
 
-  // NOTE: For simplicity in this demo, all events are placed in "Upcoming"
   const upcomingEvents = filteredEvents;
 
   return (
@@ -157,7 +168,9 @@ export function Events() {
 
             <Tabs defaultValue="upcoming">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="upcoming">Upcoming ({upcomingEvents.length})</TabsTrigger>
+                <TabsTrigger value="upcoming">
+                  {showOnlyRegistered ? "Registered Events" : "Upcoming"} ({upcomingEvents.length})
+                </TabsTrigger>
                 <TabsTrigger value="past">Past Events (0)</TabsTrigger>
               </TabsList>
 
@@ -165,7 +178,9 @@ export function Events() {
                 {isLoading ? (
                   <div className="text-center py-10 text-muted-foreground">Loading events...</div>
                 ) : upcomingEvents.length === 0 ? (
-                  <div className="text-center py-10 bg-card rounded-xl border border-border">No events found.</div>
+                  <div className="text-center py-10 bg-card rounded-xl border border-border">
+                    {showOnlyRegistered ? "You haven't registered for any events yet." : "No events found."}
+                  </div>
                 ) : (
                   upcomingEvents.map((event: any) => {
                     const isUserPost = !!event.user_id;
@@ -225,12 +240,30 @@ export function Events() {
               <CardHeader><CardTitle>Calendar</CardTitle></CardHeader>
               <CardContent><Calendar mode="single" selected={date} onSelect={setDate} className="rounded-md" /></CardContent>
             </Card>
+            
             <Card>
               <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
               <CardContent className="space-y-2">
-                <Button className="w-full justify-start gap-2" variant="outline" onClick={() => setIsModalOpen(true)}><CalendarIcon className="h-4 w-4" />Create Event</Button>
-                <Button className="w-full justify-start gap-2" variant="outline"><Users className="h-4 w-4" />My Registered Events</Button>
-                <Button className="w-full justify-start gap-2" variant="outline"><ExternalLink className="h-4 w-4" />Campus Calendar</Button>
+                <Button className="w-full justify-start gap-2" variant="outline" onClick={() => setIsModalOpen(true)}>
+                  <CalendarIcon className="h-4 w-4" />Create Event
+                </Button>
+                
+                {/* UPDATED: Toggle Registered Events */}
+                <Button 
+                  className="w-full justify-start gap-2" 
+                  variant={showOnlyRegistered ? "default" : "outline"} 
+                  onClick={() => setShowOnlyRegistered(!showOnlyRegistered)}
+                >
+                  <Users className="h-4 w-4" />
+                  {showOnlyRegistered ? "View All Events" : "My Registered Events"}
+                </Button>
+                
+                {/* UPDATED: Link to the official campus calendar */}
+                <Button className="w-full justify-start gap-2" variant="outline" asChild>
+                  <a href="https://www.montevallo.edu/campus-life/campus-calendar/" target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />Campus Calendar
+                  </a>
+                </Button>
               </CardContent>
             </Card>
           </div>
